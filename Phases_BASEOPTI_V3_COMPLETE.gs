@@ -841,383 +841,250 @@ function Phase3I_completeAndParity_BASEOPTI_V3(ctx) {
 }
 
 // ===================================================================
-// PHASE 4 V3 - SWAPS BASÉS SUR SCORES
+// PHASE 4 V3 - SWAPS BASÉS SUR L'HARMONIE ET LA PARITÉ
 // ===================================================================
 
 /**
- * Phase 4 V3 : Optimise les scores par swaps
- * LIT : _BASEOPTI
- * PRIORITÉ : COM=1 > COM=2 > TRA > PART > ABS
- * RÉCUPÈRE : Poids depuis l'UI via ctx.weights
+ * Phase 4 V3 : Optimise la répartition par swaps en se basant sur un score
+ * composite qui vise à harmoniser la distribution des scores dans les classes
+ * tout en équilibrant la parité F/M.
  */
 function Phase4_balanceScoresSwaps_BASEOPTI_V3(ctx) {
   logLine('INFO', '='.repeat(80));
-  logLine('INFO', '📌 PHASE 4 V3 - Swaps scores (depuis _BASEOPTI)');
+  logLine('INFO', '📌 PHASE 4 V3 - Swaps pour Harmonie & Parité');
   logLine('INFO', '='.repeat(80));
 
   // Récupérer poids (depuis UI ou défaut)
   const weights = ctx.weights || {
-    com: 1.0,  // Priorité MAXIMALE
-    tra: 0.7,
-    part: 0.4,
+    parity: 1.0,
+    com: 1.0,
+    tra: 0.5,
+    part: 0.3,
     abs: 0.2
   };
-
-  logLine('INFO', '⚖️ Poids : COM=' + weights.com + ', TRA=' + weights.tra + ', PART=' + weights.part + ', ABS=' + weights.abs);
+  logLine('INFO', '⚖️ Poids : PARITY=' + (weights.parity || 0) + ', COM=' + (weights.com || 0) + ', TRA=' + (weights.tra || 0) + ', PART=' + (weights.part || 0) + ', ABS=' + (weights.abs || 0));
 
   const ss = ctx.ss || SpreadsheetApp.getActive();
   const baseSheet = ss.getSheetByName('_BASEOPTI');
-
   const data = baseSheet.getDataRange().getValues();
   const headers = data[0];
-
-  const idxAssigned = headers.indexOf('_CLASS_ASSIGNED');
-  const idxCOM = headers.indexOf('COM');
-  const idxTRA = headers.indexOf('TRA');
-  const idxPART = headers.indexOf('PART');
-  const idxABS = headers.indexOf('ABS');
-  const idxSexe = headers.indexOf('SEXE');
-  const idxMobilite = headers.indexOf('MOBILITE');
-  const idxFixe = headers.indexOf('FIXE');
-  const idxNom = headers.indexOf('NOM');
 
   // Grouper par classe
   const byClass = {};
   for (let i = 1; i < data.length; i++) {
-    const cls = String(data[i][idxAssigned] || '').trim();
+    const cls = String(data[i][headers.indexOf('_CLASS_ASSIGNED')] || '').trim();
     if (cls) {
       if (!byClass[cls]) byClass[cls] = [];
       byClass[cls].push(i);
     }
   }
 
-  logLine('INFO', '📖 Élèves par classe :');
-  for (const cls in byClass) {
-    logLine('INFO', '  ' + cls + ' : ' + byClass[cls].length + ' élèves');
-  }
-
-  // Calculer variance initiale des distributions
-  const initialDist = calculateScoreDistributions_V3(data, headers, byClass);
-  const initialVariance = calculateDistributionVariance_V3(initialDist, weights);
-  logLine('INFO', '📊 Variance initiale : ' + initialVariance.toFixed(2) + ' (objectif : minimiser)');
+  // Calculer la distribution cible
+  const targetDistribution = calculateTargetDistribution_V3(data, headers, byClass);
 
   // Optimisation par swaps
   let swapsApplied = 0;
-  const maxSwaps = ctx.maxSwaps || 100;
-  const maxIterations = maxSwaps * 10;
+  const maxSwaps = ctx.maxSwaps || 500;
+  let currentScore = calculateCompositeSwapScore_V3(data, headers, byClass, targetDistribution, weights, null);
 
-  let bestVariance = initialVariance;
-  let stagnation = 0;
+  for (let iter = 0; iter < maxSwaps * 5 && swapsApplied < maxSwaps; iter++) {
+    // Trouver le meilleur swap
+    const swap = findBestSwap_V3(data, headers, byClass, targetDistribution, weights, ctx);
 
-  for (let iter = 0; iter < maxIterations && swapsApplied < maxSwaps; iter++) {
-    // Trouver meilleur swap
-    const swap = findBestSwap_V3(data, headers, byClass, weights, ctx);
-
-    if (!swap) {
-      logLine('INFO', '  🛑 Plus de swap bénéfique (iteration=' + iter + ')');
+    if (!swap || swap.score <= 0) {
+      logLine('INFO', '  🛑 Plus de swap bénéfique trouvé (score=' + (swap ? swap.score.toFixed(3) : 'null') + ').');
       break;
     }
 
     // Appliquer le swap
-    const idx1 = swap.idx1;
-    const idx2 = swap.idx2;
-    const cls1 = String(data[idx1][idxAssigned]);
-    const cls2 = String(data[idx2][idxAssigned]);
+    const { idx1, idx2 } = swap;
+    const cls1 = String(data[idx1][headers.indexOf('_CLASS_ASSIGNED')]);
+    const cls2 = String(data[idx2][headers.indexOf('_CLASS_ASSIGNED')]);
 
-    data[idx1][idxAssigned] = cls2;
-    data[idx2][idxAssigned] = cls1;
+    data[idx1][headers.indexOf('_CLASS_ASSIGNED')] = cls2;
+    data[idx2][headers.indexOf('_CLASS_ASSIGNED')] = cls1;
 
-    // Update byClass
     const pos1 = byClass[cls1].indexOf(idx1);
     const pos2 = byClass[cls2].indexOf(idx2);
-    if (pos1 >= 0) byClass[cls1][pos1] = idx2;
-    if (pos2 >= 0) byClass[cls2][pos2] = idx1;
+    if (pos1 !== -1) byClass[cls1].splice(pos1, 1, idx2);
+    if (pos2 !== -1) byClass[cls2].splice(pos2, 1, idx1);
 
     swapsApplied++;
+    currentScore -= swap.score; // Mettre à jour le score (le score du swap est un gain)
 
-    if (swapsApplied % 10 === 0) {
-      const newDist = calculateScoreDistributions_V3(data, headers, byClass);
-      const newVariance = calculateDistributionVariance_V3(newDist, weights);
-      const improvement = initialVariance - newVariance; // Positif = amélioration
-      logLine('INFO', '  📊 ' + swapsApplied + ' swaps | variance=' + newVariance.toFixed(2) + ' | amélioration=' + improvement.toFixed(2));
-
-      if (newVariance >= bestVariance) {
-        stagnation++;
-      } else {
-        bestVariance = newVariance;
-        stagnation = 0;
-      }
-
-      if (stagnation >= 5) {
-        logLine('INFO', '  ⏸️ Stagnation détectée');
-        break;
-      }
+    if (swapsApplied % 20 === 0) {
+      logLine('INFO', '  🔄 ' + swapsApplied + ' swaps | Score actuel (erreur): ' + currentScore.toFixed(2) + ' | Dernier gain: ' + swap.score.toFixed(3));
     }
   }
 
-  // Écrire dans _BASEOPTI
+  // Finalisation
   baseSheet.getRange(1, 1, data.length, headers.length).setValues(data);
   SpreadsheetApp.flush();
-
-  // Copier vers CACHE
   copyBaseoptiToCache_V3(ctx);
+  if (typeof computeMobilityFlags_ === 'function') computeMobilityFlags_(ctx);
 
-  // ✅ CORRECTION CRITIQUE : Recalculer la mobilité APRÈS la copie vers CACHE
-  // Car copyBaseoptiToCache_V3 efface les colonnes FIXE/MOBILITE (elles sont vides dans _BASEOPTI)
-  if (typeof computeMobilityFlags_ === 'function') {
-    logLine('INFO', '🔒 Recalcul des statuts de mobilité après copie CACHE...');
-    computeMobilityFlags_(ctx);
-    logLine('INFO', '✅ Colonnes FIXE et MOBILITE restaurées dans les onglets CACHE');
-  } else {
-    logLine('WARN', '⚠️ computeMobilityFlags_ non disponible (vérifier que Mobility_System.gs est chargé)');
-  }
+  const finalError = calculateCompositeSwapScore_V3(data, headers, byClass, targetDistribution, weights, null);
+  const totalImprovement = (currentScore > 0 ? currentScore : finalError) - finalError; // Correction si aucun swap n'a été fait
 
-  const finalDist = calculateScoreDistributions_V3(data, headers, byClass);
-  const finalVariance = calculateDistributionVariance_V3(finalDist, weights);
-  const totalImprovement = initialVariance - finalVariance;
-  logLine('INFO', '✅ PHASE 4 V3 terminée : ' + swapsApplied + ' swaps, variance=' + finalVariance.toFixed(2) + ' (amélioration=' + totalImprovement.toFixed(2) + ')');
+  logLine('INFO', '✅ PHASE 4 V3 terminée : ' + swapsApplied + ' swaps appliqués. Erreur finale: ' + finalError.toFixed(2));
 
-  // ✅ AUDIT COMPLET : Générer un rapport détaillé de fin d'optimisation
-  const auditReport = generateOptimizationAudit_V3(ctx, data, headers, byClass, finalDist, {
-    initialVariance: initialVariance,
-    finalVariance: finalVariance,
+  // Générer le rapport d'audit
+  const auditReport = generateOptimizationAudit_V3(ctx, data, headers, byClass, null, {
+    initialError: currentScore + totalImprovement, // Reconstituer l'erreur initiale
+    finalError: finalError,
     totalImprovement: totalImprovement,
     swapsApplied: swapsApplied
   });
 
-  // Log des distributions finales
-  logLine('INFO', '📊 Distributions finales COM score 1 :');
-  for (const cls in finalDist) {
-    logLine('INFO', '  ' + cls + ' : ' + finalDist[cls].COM[1] + ' élèves COM=1');
-  }
-
   return { 
     ok: true, 
-    swapsApplied: swapsApplied, 
-    swaps: swapsApplied,
+    swapsApplied: swapsApplied,
     audit: auditReport 
   };
 }
 
 /**
- * Calcule les distributions de scores pour chaque classe
- * Retourne : { classe: { COM: {1: count, 2: count, ...}, TRA: {...}, ... } }
+ * Calcule la distribution cible des scores pour chaque critère.
+ * @returns {Object} ex: { COM: { '1': 0.1, '2': 0.2, ... }, ... }
  */
-function calculateScoreDistributions_V3(data, headers, byClass) {
-  const idxCOM = headers.indexOf('COM');
-  const idxTRA = headers.indexOf('TRA');
-  const idxPART = headers.indexOf('PART');
-  const idxABS = headers.indexOf('ABS');
-
-  const distributions = {};
-
-  for (const cls in byClass) {
-    const indices = byClass[cls];
-
-    // Initialiser les compteurs pour chaque score (1-4)
-    distributions[cls] = {
-      COM: { 1: 0, 2: 0, 3: 0, 4: 0 },
-      TRA: { 1: 0, 2: 0, 3: 0, 4: 0 },
-      PART: { 1: 0, 2: 0, 3: 0, 4: 0 },
-      ABS: { 1: 0, 2: 0, 3: 0, 4: 0 }
-    };
-
-    // Compter les scores
-    indices.forEach(function(idx) {
-      const com = Number(data[idx][idxCOM] || 3);
-      const tra = Number(data[idx][idxTRA] || 3);
-      const part = Number(data[idx][idxPART] || 3);
-      const abs = Number(data[idx][idxABS] || 3);
-
-      distributions[cls].COM[com] = (distributions[cls].COM[com] || 0) + 1;
-      distributions[cls].TRA[tra] = (distributions[cls].TRA[tra] || 0) + 1;
-      distributions[cls].PART[part] = (distributions[cls].PART[part] || 0) + 1;
-      distributions[cls].ABS[abs] = (distributions[cls].ABS[abs] || 0) + 1;
-    });
-  }
-
-  return distributions;
-}
-
-/**
- * Calcule la variance des distributions entre classes
- * Plus la variance est basse, plus l'équilibre est bon
- */
-function calculateDistributionVariance_V3(distributions, weights) {
+function calculateTargetDistribution_V3(data, headers, byClass) {
   const criteria = ['COM', 'TRA', 'PART', 'ABS'];
-  const scores = [1, 2, 3, 4];
+  const totalStudents = data.length - 1;
+  const globalCounts = {};
 
-  let totalVariance = 0;
-
-  criteria.forEach(function(criterion) {
-    const weight = weights[criterion.toLowerCase()] || 1.0;
-
-    scores.forEach(function(score) {
-      // Collecter les effectifs pour ce score dans toutes les classes
-      const counts = [];
-      for (const cls in distributions) {
-        counts.push(distributions[cls][criterion][score] || 0);
+  criteria.forEach(crit => {
+    const idx = headers.indexOf(crit);
+    globalCounts[crit] = { '1': 0, '2': 0, '3': 0, '4': 0 };
+    for (let i = 1; i < data.length; i++) {
+      const score = String(data[i][idx] || '3');
+      if (globalCounts[crit][score]) {
+        globalCounts[crit][score]++;
+      } else {
+        globalCounts[crit][score] = 1; // Handle potential other values
       }
-
-      // Calculer la variance
-      const mean = counts.reduce((a, b) => a + b, 0) / counts.length;
-      const variance = counts.reduce((sum, count) => sum + Math.pow(count - mean, 2), 0) / counts.length;
-
-      // Ajouter à la variance totale pondérée
-      // Pour COM et score 1, appliquer un poids encore plus fort
-      const bonus = (criterion === 'COM' && score === 1) ? 2.0 : 1.0;
-      totalVariance += variance * weight * bonus;
-    });
+    }
   });
 
-  return totalVariance;
+  const targetDistribution = {};
+  criteria.forEach(crit => {
+    targetDistribution[crit] = {};
+    for (let s = 1; s <= 4; s++) {
+      targetDistribution[crit][s] = globalCounts[crit][s] / totalStudents;
+    }
+  });
+
+  return targetDistribution;
 }
 
 /**
- * Calcule le score de parité global (somme des |F-M| pour toutes les classes)
- * Plus le score est bas, meilleure est la parité
+ * Calcule "l'erreur d'harmonie" pour un critère et une répartition donnés.
  */
-function calculateParityScore_V3(data, headers, byClass) {
-  const idxSexe = headers.indexOf('SEXE');
-  let totalParityGap = 0;
+function calculateHarmonyError_V3(byClass, data, headers, criterion, targetDistribution) {
+  const idx = headers.indexOf(criterion);
+  let totalError = 0;
 
   for (const cls in byClass) {
-    let countF = 0;
-    let countM = 0;
+    const classSize = byClass[cls].length;
+    const currentCounts = { '1': 0, '2': 0, '3': 0, '4': 0 };
 
-    byClass[cls].forEach(function(idx) {
-      const sexe = String(data[idx][idxSexe] || '').toUpperCase();
-      if (sexe === 'F') countF++;
-      else if (sexe === 'M') countM++;
+    byClass[cls].forEach(studentIdx => {
+      const score = String(data[studentIdx][idx] || '3');
+      if (currentCounts[score]) currentCounts[score]++; else currentCounts[score] = 1;
     });
 
+    for (let s = 1; s <= 4; s++) {
+      const targetCount = targetDistribution[criterion][s] * classSize;
+      totalError += Math.abs(currentCounts[s] - targetCount);
+    }
+  }
+  return totalError;
+}
+
+/**
+ * Calcule le score de parité (somme des |F-M|).
+ */
+function calculateParityError_V3(byClass, data, headers) {
+  const idxSexe = headers.indexOf('SEXE');
+  let totalParityGap = 0;
+  for (const cls in byClass) {
+    let countF = 0, countM = 0;
+    byClass[cls].forEach(idx => {
+      if (String(data[idx][idxSexe] || '').toUpperCase() === 'F') countF++; else countM++;
+    });
     totalParityGap += Math.abs(countF - countM);
   }
-
   return totalParityGap;
 }
 
 /**
- * Trouve le meilleur swap possible
- * Critère principal : variance des scores
- * Critère de départage : parité (si amélioration variance similaire)
+ * Calcule le score composite d'une répartition (erreur totale à minimiser).
  */
-function findBestSwap_V3(data, headers, byClass, weights, ctx) {
+function calculateCompositeSwapScore_V3(data, headers, byClass, targetDistribution, weights, swap) {
+  const criteria = ['COM', 'TRA', 'PART', 'ABS'];
+  let totalError = 0;
+
+  if (swap) { // Simulation rapide
+    const { idx1, idx2 } = swap;
+    const cls1 = String(data[idx1][headers.indexOf('_CLASS_ASSIGNED')]);
+    const cls2 = String(data[idx2][headers.indexOf('_CLASS_ASSIGNED')]);
+
+    const tempByClass = JSON.parse(JSON.stringify(byClass));
+    const pos1 = tempByClass[cls1].indexOf(idx1);
+    const pos2 = tempByClass[cls2].indexOf(idx2);
+    if(pos1 !== -1) tempByClass[cls1].splice(pos1, 1, idx2);
+    if(pos2 !== -1) tempByClass[cls2].splice(pos2, 1, idx1);
+    byClass = tempByClass;
+  }
+
+  // Erreur de parité
+  totalError += calculateParityError_V3(byClass, data, headers) * (weights.parity || 1.0);
+
+  // Erreurs d'harmonie
+  criteria.forEach(crit => {
+    totalError += calculateHarmonyError_V3(byClass, data, headers, crit, targetDistribution) * (weights[crit.toLowerCase()] || 0.1);
+  });
+
+  return totalError;
+}
+
+
+/**
+ * Trouve le meilleur swap possible en maximisant le gain sur le score composite.
+ */
+function findBestSwap_V3(data, headers, byClass, targetDistribution, weights, ctx) {
   const idxMobilite = headers.indexOf('MOBILITE');
   const idxFixe = headers.indexOf('FIXE');
 
   let bestSwap = null;
-  let bestImprovement = 0.001; // Seuil minimum de réduction de variance
-  let bestParityGain = 0; // Gain de parité du meilleur swap
+  let bestScoreGain = 0.001; // Seuil minimum
 
-  const currentDist = calculateScoreDistributions_V3(data, headers, byClass);
-  const currentVariance = calculateDistributionVariance_V3(currentDist, weights);
-  const currentParityScore = calculateParityScore_V3(data, headers, byClass);
-
-  // 📊 Compteurs de debug
-  let tested = 0;
-  let blockedByMobility = 0;
-  let blockedByDissoAsso = 0;
-  let noImprovement = 0;
+  const errorBefore = calculateCompositeSwapScore_V3(data, headers, byClass, targetDistribution, weights, null);
 
   const classes = Object.keys(byClass);
-
-  // Essayer swaps entre paires de classes
   for (let i = 0; i < classes.length; i++) {
     for (let j = i + 1; j < classes.length; j++) {
       const cls1 = classes[i];
       const cls2 = classes[j];
 
-      const indices1 = byClass[cls1];
-      const indices2 = byClass[cls2];
+      byClass[cls1].forEach(idx1 => {
+        if (String(data[idx1][idxMobilite] || '').toUpperCase() === 'FIXE' || String(data[idx1][idxFixe] || '').toUpperCase() === 'FIXE') return;
 
-      // Limiter recherche
-      const max = 15;
-      for (let s1 = 0; s1 < Math.min(indices1.length, max); s1++) {
-        const idx1 = indices1[s1];
+        byClass[cls2].forEach(idx2 => {
+          if (String(data[idx2][idxMobilite] || '').toUpperCase() === 'FIXE' || String(data[idx2][idxFixe] || '').toUpperCase() === 'FIXE') return;
 
-        // Vérifier mobilité
-        const mob1 = String(data[idx1][idxMobilite] || '').toUpperCase();
-        const fixe1 = String(data[idx1][idxFixe] || '').toUpperCase();
-        if (mob1 === 'FIXE' || fixe1 === 'FIXE') {
-          blockedByMobility++;
-          continue;
-        }
-
-        for (let s2 = 0; s2 < Math.min(indices2.length, max); s2++) {
-          const idx2 = indices2[s2];
-
-          const mob2 = String(data[idx2][idxMobilite] || '').toUpperCase();
-          const fixe2 = String(data[idx2][idxFixe] || '').toUpperCase();
-          if (mob2 === 'FIXE' || fixe2 === 'FIXE') {
-            blockedByMobility++;
-            continue;
-          }
-
-          tested++;
-
-          // 🔒 VÉRIFIER CONTRAINTES DISSO/ASSO/LV2/OPT avant le swap
           const swapCheck = canSwapStudents_V3(idx1, cls1, idx2, cls2, data, headers, ctx);
-          if (!swapCheck.ok) {
-            blockedByDissoAsso++;
-            continue; // Skip ce swap s'il viole DISSO/ASSO/LV2/OPT
+          if (!swapCheck.ok) return;
+
+          const errorAfter = calculateCompositeSwapScore_V3(data, headers, byClass, targetDistribution, weights, { idx1, idx2 });
+          const scoreGain = errorBefore - errorAfter;
+
+          if (scoreGain > bestScoreGain) {
+            bestScoreGain = scoreGain;
+            bestSwap = { idx1, idx2, score: bestScoreGain };
           }
-
-          // Simuler le swap
-          const saved1 = data[idx1][headers.indexOf('_CLASS_ASSIGNED')];
-          const saved2 = data[idx2][headers.indexOf('_CLASS_ASSIGNED')];
-
-          data[idx1][headers.indexOf('_CLASS_ASSIGNED')] = cls2;
-          data[idx2][headers.indexOf('_CLASS_ASSIGNED')] = cls1;
-
-          // Update temporaire byClass
-          byClass[cls1][s1] = idx2;
-          byClass[cls2][s2] = idx1;
-
-          // Calculer nouvelle variance
-          const newDist = calculateScoreDistributions_V3(data, headers, byClass);
-          const newVariance = calculateDistributionVariance_V3(newDist, weights);
-          const improvement = currentVariance - newVariance; // Positif = réduction de variance = bon
-
-          // Calculer impact sur la parité (critère de départage)
-          const newParityScore = calculateParityScore_V3(data, headers, byClass);
-          const parityGain = currentParityScore - newParityScore; // Positif = amélioration parité
-
-          // Restaurer
-          data[idx1][headers.indexOf('_CLASS_ASSIGNED')] = saved1;
-          data[idx2][headers.indexOf('_CLASS_ASSIGNED')] = saved2;
-          byClass[cls1][s1] = idx1;
-          byClass[cls2][s2] = idx2;
-
-          // Décider si ce swap est meilleur
-          let takeThisSwap = false;
-
-          if (improvement > bestImprovement * 1.02) {
-            // Amélioration variance significativement meilleure (> 2%)
-            takeThisSwap = true;
-          } else if (improvement >= bestImprovement * 0.98 && improvement > 0.001) {
-            // Amélioration variance similaire (écart < 2%), utiliser parité comme départage
-            if (parityGain > bestParityGain) {
-              takeThisSwap = true;
-            }
-          }
-
-          if (takeThisSwap) {
-            bestImprovement = improvement;
-            bestParityGain = parityGain;
-            bestSwap = { idx1: idx1, idx2: idx2, improvement: improvement, parityGain: parityGain };
-          } else {
-            noImprovement++;
-          }
-        }
-      }
+        });
+      });
     }
-  }
-
-  // 📊 Log des statistiques de recherche
-  if (tested > 0 || blockedByMobility > 0 || blockedByDissoAsso > 0) {
-    logLine('INFO', '  🔍 Recherche swap : ' + tested + ' testés, ' + blockedByMobility + ' bloqués (mobilité), ' +
-            blockedByDissoAsso + ' bloqués (DISSO/ASSO), ' + noImprovement + ' sans amélioration');
   }
 
   return bestSwap;
