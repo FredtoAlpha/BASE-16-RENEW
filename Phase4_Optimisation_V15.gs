@@ -567,16 +567,17 @@ function V11_OptimisationDistribution_Combined(poidsInput, poidsOverride, maxSwa
   
   try {
     // --- 1. Configuration ---
-    const poidsBase = { 
-      tetesDeClasse: 3.0, 
-      niveau1: 2.5, 
-      distribution: 1.5, 
+    const poidsBase = {
+      tetesDeClasse: 3.0,
+      niveau1: 2.5,
+      distribution: 1.5,
       parite: 2.5,           // Priorité haute pour parité
-      histoGlobal: 3.0,      // Nouveau : équilibre effectifs globaux (COM/TRA/PART/ABS)
-      com1: 0, 
-      tra4: 0, 
-      part4: 0, 
-      garantieTete: 1000 
+      histoGlobal: 3.0,      // Équilibre effectifs globaux (COM/TRA/PART/ABS)
+      equilibreForces: 2.2,  // Nouvelle mesure: éviter classes trop fortes/faibles
+      com1: 0,
+      tra4: 0,
+      part4: 0,
+      garantieTete: 1000
     };
     const poidsEffectifs = { ...poidsBase, ...(poidsOverride || {}) };
     const SEUIL_IMPACT_MINIMAL = 1e-6;
@@ -922,6 +923,54 @@ function scoreClasseDistribution(classe, target, weights) {
     return { dist, counts, n };
 }
 
+const CLASS_STRENGTH_WEIGHTS = Object.freeze({
+    COM: 1.0,
+    TRA: 0.85,
+    PART: 0.75,
+    ABS: 0.5
+});
+
+function computeClassStrengthScore(classe, weights) {
+    if (!Array.isArray(classe) || classe.length === 0) return 0;
+    const w = Object.assign({}, CLASS_STRENGTH_WEIGHTS, weights || {});
+    const weightSum = (w.COM || 0) + (w.TRA || 0) + (w.PART || 0) + (w.ABS || 0);
+    if (weightSum <= 0) return 0;
+
+    let total = 0;
+    classe.forEach(eleve => {
+        if (!eleve) return;
+        const nCom = typeof eleve.niveauCOM === 'number' ? eleve.niveauCOM : getNiveau(eleve.COM);
+        const nTra = typeof eleve.niveauTRA === 'number' ? eleve.niveauTRA : getNiveau(eleve.TRA);
+        const nPart = typeof eleve.niveauPART === 'number' ? eleve.niveauPART : getNiveau(eleve.PART);
+        const absLevelRaw = typeof eleve.niveauABS === 'number' ? eleve.niveauABS : getNiveau(eleve.ABS);
+        const nAbs = Math.max(1, Math.min(4, absLevelRaw || 1));
+        const adjustedAbs = 5 - nAbs; // Peu d'absences = contribution positive
+
+        const strength = (nCom * (w.COM || 0)) +
+                         (nTra * (w.TRA || 0)) +
+                         (nPart * (w.PART || 0)) +
+                         (adjustedAbs * (w.ABS || 0));
+        total += strength / weightSum;
+    });
+
+    return total / classe.length;
+}
+
+function computeGlobalEquityScore(stats) {
+    if (!stats) return 0;
+    const parts = [
+        stats.tetesDeClasse?.ecartType,
+        stats.niveau1?.ecartType,
+        stats.distribution?.ecartMoyen,
+        stats.forceEquilibre?.ecartType,
+        (stats.forceEquilibre?.maxDelta || 0) / 2
+    ];
+    return parts.reduce((sum, val) => {
+        if (typeof val !== 'number' || isNaN(val) || val < 0) return sum;
+        return sum + val;
+    }, 0);
+}
+
 function classifierEleves(students, extraKeys) { 
     Logger.log("Moteur V14 - Classification élèves..."); 
     if (!Array.isArray(students)) {
@@ -933,7 +982,8 @@ function classifierEleves(students, extraKeys) {
 
         eleve.niveauCOM = getNiveau(eleve.COM); 
         eleve.niveauTRA = getNiveau(eleve.TRA); 
-        eleve.niveauPART = getNiveau(eleve.PART); 
+        eleve.niveauPART = getNiveau(eleve.PART);
+        eleve.niveauABS = getNiveau(eleve.ABS);
         
         eleve.estTeteDeClasse = (eleve.niveauCOM === 4 || eleve.niveauTRA === 4 || eleve.niveauPART === 4);
         eleve.estNiveau1 = (eleve.niveauCOM === 1 || eleve.niveauTRA === 1 || eleve.niveauPART === 1);
@@ -953,18 +1003,23 @@ function classifierEleves(students, extraKeys) {
 
 function calculerStatistiquesDistribution(classesMap, totalElevesGlobal, extraKeys) { 
     const classesUniques = Object.keys(classesMap); 
-    const stats = { 
-        tetesDeClasse: { compteParClasse: {}, moyenne: 0, ecartType: 0 }, 
-        niveau1: { compteParClasse: {}, moyenne: 0, ecartType: 0 }, 
-        distribution: { parClasse: {}, global: {1:0, 2:0, 3:0, 4:0}, ecartMoyen: 0 }, 
-        extra: {} 
-    }; 
+    const stats = {
+        tetesDeClasse: { compteParClasse: {}, moyenne: 0, ecartType: 0 },
+        niveau1: { compteParClasse: {}, moyenne: 0, ecartType: 0 },
+        distribution: { parClasse: {}, global: {1:0, 2:0, 3:0, 4:0}, ecartMoyen: 0 },
+        forceEquilibre: { scoreParClasse: {}, moyenne: 0, ecartType: 0, maxDelta: 0, weights: CLASS_STRENGTH_WEIGHTS },
+        extra: {}
+    };
     (extraKeys || []).forEach(k => { stats.extra[k] = { compteParClasse: {}, moyenne: 0, ecartType: 0 }; }); 
 
     if (classesUniques.length === 0) return stats; 
 
     let totalTetesDeClasse = 0;
-    let totalNiveau1 = 0; 
+    let totalNiveau1 = 0;
+    let totalStrength = 0;
+    let minStrength = Number.POSITIVE_INFINITY;
+    let maxStrength = Number.NEGATIVE_INFINITY;
+    let classesAvecStrength = 0;
     const totalParExtraKey = {}; 
     (extraKeys || []).forEach(k => totalParExtraKey[k] = 0); 
     const distribGlobalComptes = {1:0, 2:0, 3:0, 4:0};
@@ -973,12 +1028,13 @@ function calculerStatistiquesDistribution(classesMap, totalElevesGlobal, extraKe
         const eleves = classesMap[className] || []; 
         const nbElevesClasse = eleves.length; 
         
-        stats.tetesDeClasse.compteParClasse[className] = 0; 
-        stats.niveau1.compteParClasse[className] = 0; 
-        stats.distribution.parClasse[className] = {1:0, 2:0, 3:0, 4:0}; 
+        stats.tetesDeClasse.compteParClasse[className] = 0;
+        stats.niveau1.compteParClasse[className] = 0;
+        stats.distribution.parClasse[className] = {1:0, 2:0, 3:0, 4:0};
+        stats.forceEquilibre.scoreParClasse[className] = 0;
         (extraKeys || []).forEach(k => { if(stats.extra[k]) stats.extra[k].compteParClasse[className] = 0; }); 
 
-        if (nbElevesClasse === 0) return; 
+        if (nbElevesClasse === 0) return;
 
         let comptesTetesClasse = 0;
         let comptesNiveau1 = 0; 
@@ -1000,34 +1056,53 @@ function calculerStatistiquesDistribution(classesMap, totalElevesGlobal, extraKe
             }
         });
         
-        stats.tetesDeClasse.compteParClasse[className] = comptesTetesClasse; 
-        stats.niveau1.compteParClasse[className] = comptesNiveau1; 
+        stats.tetesDeClasse.compteParClasse[className] = comptesTetesClasse;
+        stats.niveau1.compteParClasse[className] = comptesNiveau1;
         (extraKeys || []).forEach(k => { if(stats.extra[k]) stats.extra[k].compteParClasse[className] = comptesParExtraKeyClasse[k]; }); 
         
         for(let niv=1; niv<=4; niv++){ 
             stats.distribution.parClasse[className][niv] = nbElevesClasse > 0 ? ((distribClasseComptes[niv]||0) / nbElevesClasse) : 0; 
         } 
         
-        totalTetesDeClasse += comptesTetesClasse; 
-        totalNiveau1 += comptesNiveau1; 
-        (extraKeys || []).forEach(k => totalParExtraKey[k] += comptesParExtraKeyClasse[k]); 
+        totalTetesDeClasse += comptesTetesClasse;
+        totalNiveau1 += comptesNiveau1;
+        (extraKeys || []).forEach(k => totalParExtraKey[k] += comptesParExtraKeyClasse[k]);
+
+        const strengthScore = computeClassStrengthScore(eleves, stats.forceEquilibre.weights);
+        if (typeof strengthScore === 'number' && !isNaN(strengthScore)) {
+            stats.forceEquilibre.scoreParClasse[className] = strengthScore;
+            totalStrength += strengthScore;
+            minStrength = Math.min(minStrength, strengthScore);
+            maxStrength = Math.max(maxStrength, strengthScore);
+            classesAvecStrength++;
+        }
     });
 
-    if (totalElevesGlobal > 0 && classesUniques.length > 0) { 
-        const nbClasses = classesUniques.length; 
-        stats.tetesDeClasse.moyenne = totalTetesDeClasse / nbClasses; 
-        stats.niveau1.moyenne = totalNiveau1 / nbClasses; 
-        (extraKeys || []).forEach(k => { if(stats.extra[k]) stats.extra[k].moyenne = totalParExtraKey[k] / nbClasses; }); 
-        
-        for(let niv=1; niv<=4; niv++){ 
-            stats.distribution.global[niv] = (distribGlobalComptes[niv] || 0) / totalElevesGlobal; 
+    if (totalElevesGlobal > 0 && classesUniques.length > 0) {
+        const nbClasses = classesUniques.length;
+        stats.tetesDeClasse.moyenne = totalTetesDeClasse / nbClasses;
+        stats.niveau1.moyenne = totalNiveau1 / nbClasses;
+        (extraKeys || []).forEach(k => { if(stats.extra[k]) stats.extra[k].moyenne = totalParExtraKey[k] / nbClasses; });
+
+        for(let niv=1; niv<=4; niv++){
+            stats.distribution.global[niv] = (distribGlobalComptes[niv] || 0) / totalElevesGlobal;
         }
-        
-        stats.tetesDeClasse.ecartType = calculateStdDevFromCounts(stats.tetesDeClasse.compteParClasse, stats.tetesDeClasse.moyenne); 
-        stats.niveau1.ecartType = calculateStdDevFromCounts(stats.niveau1.compteParClasse, stats.niveau1.moyenne); 
-        (extraKeys || []).forEach(k => { if(stats.extra[k]) stats.extra[k].ecartType = calculateStdDevFromCounts(stats.extra[k].compteParClasse, stats.extra[k].moyenne); }); 
-        stats.distribution.ecartMoyen = calculateAvgRmseDistribution(stats.distribution.parClasse, stats.distribution.global); 
-    } 
+
+        stats.tetesDeClasse.ecartType = calculateStdDevFromCounts(stats.tetesDeClasse.compteParClasse, stats.tetesDeClasse.moyenne);
+        stats.niveau1.ecartType = calculateStdDevFromCounts(stats.niveau1.compteParClasse, stats.niveau1.moyenne);
+        (extraKeys || []).forEach(k => { if(stats.extra[k]) stats.extra[k].ecartType = calculateStdDevFromCounts(stats.extra[k].compteParClasse, stats.extra[k].moyenne); });
+        stats.distribution.ecartMoyen = calculateAvgRmseDistribution(stats.distribution.parClasse, stats.distribution.global);
+
+        if (classesAvecStrength > 0) {
+            stats.forceEquilibre.moyenne = totalStrength / classesAvecStrength;
+            stats.forceEquilibre.ecartType = calculateStdDevFromCounts(stats.forceEquilibre.scoreParClasse, stats.forceEquilibre.moyenne);
+            stats.forceEquilibre.maxDelta = (minStrength === Number.POSITIVE_INFINITY) ? 0 : (maxStrength - minStrength);
+        }
+    }
+    stats.totalTetes = totalTetesDeClasse;
+    stats.totalNiveau1 = totalNiveau1;
+    stats.forceEquilibre.weights = stats.forceEquilibre.weights || CLASS_STRENGTH_WEIGHTS;
+    stats.scoreGlobal = computeGlobalEquityScore(stats);
     return stats;
 }
 
@@ -1149,7 +1224,7 @@ function evaluerImpactDistribution(eleve1, eleve2, currentClassesMap, currentSta
     const ameliorationTetes = (currentStats.tetesDeClasse?.ecartType || 0) - (isNaN(nSDT) ? (currentStats.tetesDeClasse?.ecartType || 0) : nSDT); 
     const ameliorationNiveau1 = (currentStats.niveau1?.ecartType || 0) - (isNaN(nSDN1) ? (currentStats.niveau1?.ecartType || 0) : nSDN1); 
     const ameliorationDistrib = (currentStats.distribution?.ecartMoyen || 0) - (isNaN(nARmseD) ? (currentStats.distribution?.ecartMoyen || 0) : nARmseD); 
-    const ameliorationExtra = {}; 
+    const ameliorationExtra = {};
     currentExtraKeys.forEach(k => {
         if (currentStats.extra?.[k]) {
             ameliorationExtra[k] = (currentStats.extra[k].ecartType || 0) - (isNaN(nSDEx[k]) ? (currentStats.extra[k].ecartType || 0) : nSDEx[k]);
@@ -1157,7 +1232,31 @@ function evaluerImpactDistribution(eleve1, eleve2, currentClassesMap, currentSta
             ameliorationExtra[k] = 0;
         }
     });
-    
+
+    const currentStrengthMap = currentStats.forceEquilibre?.scoreParClasse || {};
+    const strengthWeights = currentStats.forceEquilibre?.weights || CLASS_STRENGTH_WEIGHTS;
+    const strengthC1Apres = computeClassStrengthScore(elevesClasse1ApresSwap, strengthWeights);
+    const strengthC2Apres = computeClassStrengthScore(elevesClasse2ApresSwap, strengthWeights);
+
+    const nStrengthStd = calcNewSD(currentStrengthMap, currentStats.forceEquilibre?.moyenne ?? 0, c1N, c2N, strengthC1Apres, strengthC2Apres);
+    const currentStrengthStd = currentStats.forceEquilibre?.ecartType || 0;
+    const ameliorationStrengthStd = (currentStrengthStd || 0) - (isNaN(nStrengthStd) ? (currentStrengthStd || 0) : nStrengthStd);
+
+    const strengthTemp = Object.assign({}, currentStrengthMap, { [c1N]: strengthC1Apres, [c2N]: strengthC2Apres });
+    const valuesStrength = Object.values(strengthTemp).filter(v => typeof v === 'number' && !isNaN(v));
+    let ameliorationStrengthDelta = 0;
+    if (valuesStrength.length > 0) {
+        const newMaxDelta = Math.max(...valuesStrength) - Math.min(...valuesStrength);
+        let currentMaxDelta = currentStats.forceEquilibre?.maxDelta;
+        if (typeof currentMaxDelta !== 'number' || isNaN(currentMaxDelta)) {
+            const currentValues = Object.values(currentStrengthMap).filter(v => typeof v === 'number' && !isNaN(v));
+            currentMaxDelta = currentValues.length > 0 ? Math.max(...currentValues) - Math.min(...currentValues) : 0;
+        }
+        ameliorationStrengthDelta = (currentMaxDelta || 0) - newMaxDelta;
+    }
+
+    const ameliorationForces = ameliorationStrengthStd + ameliorationStrengthDelta;
+
     // === PARITÉ ADAPTATIVE : CALCUL AVEC CIBLES RÉALISTES ===
     const countSexe = (eleves, sexe) => eleves.filter(e => _v14SexeNormalize(e.SEXE) === sexe).length;
     const f1Avant = countSexe(elC1, 'F');
@@ -1222,13 +1321,14 @@ function evaluerImpactDistribution(eleve1, eleve2, currentClassesMap, currentSta
     const ameliorationHistoGlobal = scoreAvant - scoreApres;
     
     // === CALCUL IMPACT TOTAL ===
-    let impactTotal = (poidsEffectifs.tetesDeClasse * ameliorationTetes) + 
-                      (poidsEffectifs.niveau1 * ameliorationNiveau1) + 
+    let impactTotal = (poidsEffectifs.tetesDeClasse * ameliorationTetes) +
+                      (poidsEffectifs.niveau1 * ameliorationNiveau1) +
                       (poidsEffectifs.distribution * ameliorationDistrib) +
                       (poidsEffectifs.parite * ameliorationParite) +
-                      (poidsEffectifs.histoGlobal * ameliorationHistoGlobal);
-    
-    currentExtraKeys.forEach(k => impactTotal += ((poidsEffectifs[k]||0) * (ameliorationExtra[k]||0))); 
+                      (poidsEffectifs.histoGlobal * ameliorationHistoGlobal) +
+                      ((poidsEffectifs.equilibreForces || 0) * ameliorationForces);
+
+    currentExtraKeys.forEach(k => impactTotal += ((poidsEffectifs[k]||0) * (ameliorationExtra[k]||0)));
     return impactTotal;
 }
 
@@ -1238,6 +1338,8 @@ function getUpdatedStats(currentStats, classe1Name, classe2Name, elevesClasse1Ap
     statsApres.tetesDeClasse = statsApres.tetesDeClasse || {compteParClasse:{}, moyenne:0, ecartType:0};
     statsApres.niveau1 = statsApres.niveau1 || {compteParClasse:{}, moyenne:0, ecartType:0};
     statsApres.distribution = statsApres.distribution || {parClasse:{}, global:{1:0,2:0,3:0,4:0}, ecartMoyen:0};
+    statsApres.forceEquilibre = statsApres.forceEquilibre || { scoreParClasse:{}, moyenne:0, ecartType:0, maxDelta:0, weights: CLASS_STRENGTH_WEIGHTS };
+    statsApres.forceEquilibre.weights = statsApres.forceEquilibre.weights || CLASS_STRENGTH_WEIGHTS;
     statsApres.extra = statsApres.extra || {};
     const currentExtraKeys = Object.keys(statsApres.extra); 
     currentExtraKeys.forEach(k => { statsApres.extra[k] = statsApres.extra[k] || {compteParClasse:{}, moyenne:0, ecartType:0}; });
@@ -1289,7 +1391,39 @@ function getUpdatedStats(currentStats, classe1Name, classe2Name, elevesClasse1Ap
     } else {
         for(let niv=1; niv<=4; niv++) statsApres.distribution.global[niv] = 0;
     }
-    statsApres.distribution.ecartMoyen = calculateAvgRmseDistribution(statsApres.distribution.parClasse, statsApres.distribution.global); 
+    statsApres.distribution.ecartMoyen = calculateAvgRmseDistribution(statsApres.distribution.parClasse, statsApres.distribution.global);
+
+    const strengthWeights = statsApres.forceEquilibre.weights || CLASS_STRENGTH_WEIGHTS;
+    let totalStrength = 0;
+    let minStrength = Number.POSITIVE_INFINITY;
+    let maxStrength = Number.NEGATIVE_INFINITY;
+    let classesAvecStrength = 0;
+    allClassNames.forEach(cl => {
+        const elevesClasse = updatedClassesMap[cl] || [];
+        const strengthScore = (cl === classe1Name || cl === classe2Name)
+            ? computeClassStrengthScore(cl === classe1Name ? elevesClasse1Apres : elevesClasse2Apres, strengthWeights)
+            : (typeof statsApres.forceEquilibre.scoreParClasse[cl] === 'number'
+                ? statsApres.forceEquilibre.scoreParClasse[cl]
+                : computeClassStrengthScore(elevesClasse, strengthWeights));
+        statsApres.forceEquilibre.scoreParClasse[cl] = strengthScore;
+        if (typeof strengthScore === 'number' && !isNaN(strengthScore)) {
+            totalStrength += strengthScore;
+            minStrength = Math.min(minStrength, strengthScore);
+            maxStrength = Math.max(maxStrength, strengthScore);
+            classesAvecStrength++;
+        }
+    });
+    if (classesAvecStrength > 0) {
+        statsApres.forceEquilibre.moyenne = totalStrength / classesAvecStrength;
+        statsApres.forceEquilibre.ecartType = calculateStdDevFromCounts(statsApres.forceEquilibre.scoreParClasse, statsApres.forceEquilibre.moyenne);
+        statsApres.forceEquilibre.maxDelta = (minStrength === Number.POSITIVE_INFINITY) ? 0 : (maxStrength - minStrength);
+    } else {
+        statsApres.forceEquilibre.moyenne = 0;
+        statsApres.forceEquilibre.ecartType = 0;
+        statsApres.forceEquilibre.maxDelta = 0;
+    }
+
+    statsApres.scoreGlobal = computeGlobalEquityScore(statsApres);
     return statsApres;
 }
 
@@ -2762,7 +2896,7 @@ function lancerOptimisationV14_Wrapper(scenariosChoisis, maxSwaps) {
 
 function construirePoidsDepuisScenarios(scenarios = ["STANDARD"]) {
     const BOOST_VALUE = 6.0; 
-    const poids = { tetesDeClasse: 3.0, niveau1: 2.5, distribution: 1.5, com1: 0, tra4: 0, part4: 0, garantieTete: 1000 };
+    const poids = { tetesDeClasse: 3.0, niveau1: 2.5, distribution: 1.5, equilibreForces: 2.2, com1: 0, tra4: 0, part4: 0, garantieTete: 1000 };
     (scenarios || []).forEach(scenario => { 
         switch (String(scenario).toUpperCase()) { 
             case "COM": poids.com1 = BOOST_VALUE; break; 
@@ -3347,14 +3481,15 @@ function lancerOptimisationAvecDebugComplet() {
     Logger.log(`Paramètres: Scénarios=${scenarios}, MaxSwaps=${maxSwaps}`);
     
     // Appeler directement V11_OptimisationDistribution_Combined avec logs
-    const resultat = V11_OptimisationDistribution_Combined(null, { 
-      tetesDeClasse: 3.0, 
-      niveau1: 2.5, 
-      distribution: 1.5, 
-      com1: 0, 
-      tra4: 0, 
-      part4: 0, 
-      garantieTete: 1000 
+    const resultat = V11_OptimisationDistribution_Combined(null, {
+      tetesDeClasse: 3.0,
+      niveau1: 2.5,
+      distribution: 1.5,
+      equilibreForces: 2.2,
+      com1: 0,
+      tra4: 0,
+      part4: 0,
+      garantieTete: 1000
     }, maxSwaps);
     
     // Restaurer le mode debug
@@ -3464,14 +3599,15 @@ function analyserPourquoiZeroSwaps() {
     const statsInitiales = calculerStatistiquesDistribution(classesMap, students.length, ["com1", "tra4", "part4"]);
     
     // Paramètres de génération
-    const poidsEffectifs = { 
-      tetesDeClasse: 3.0, 
-      niveau1: 2.5, 
-      distribution: 1.5, 
-      com1: 0, 
-      tra4: 0, 
-      part4: 0, 
-      garantieTete: 1000 
+    const poidsEffectifs = {
+      tetesDeClasse: 3.0,
+      niveau1: 2.5,
+      distribution: 1.5,
+      equilibreForces: 2.2,
+      com1: 0,
+      tra4: 0,
+      part4: 0,
+      garantieTete: 1000
     };
     
     const penaltyFunc = (classe, tentativeTetes) => {
@@ -3579,7 +3715,7 @@ function testerUnSwapDirect() {
       e1, e2, 
       elevesResult.classesMap, 
       statsInitiales, 
-      { tetesDeClasse: 3.0, niveau1: 2.5, distribution: 1.5 }, 
+      { tetesDeClasse: 3.0, niveau1: 2.5, distribution: 1.5, equilibreForces: 2.2 },
       () => 0
     );
     
@@ -3702,6 +3838,16 @@ function logStatsDetaillees(stats) {
     Logger.log(`  Niveau ${niveau}: ${(pourcent * 100).toFixed(1)}%`);
   });
   Logger.log(`Écart moyen distribution: ${stats.distribution.ecartMoyen.toFixed(4)}`);
+
+  if (stats.forceEquilibre && stats.forceEquilibre.scoreParClasse) {
+    Logger.log("\nIndice de force composite par classe:");
+    Object.entries(stats.forceEquilibre.scoreParClasse).forEach(([classe, score]) => {
+      if (typeof score === 'number' && !isNaN(score)) {
+        Logger.log(`  ${classe}: ${score.toFixed(3)}`);
+      }
+    });
+    Logger.log(`Moyenne: ${stats.forceEquilibre.moyenne.toFixed(3)}, Écart-type: ${stats.forceEquilibre.ecartType.toFixed(4)}, Δ max: ${stats.forceEquilibre.maxDelta.toFixed(4)}`);
+  }
 }
 
 // 3. TESTER DES SWAPS MANUELS
@@ -3721,7 +3867,7 @@ function testerSwapsManuels(classesMap, statsInitiales) {
       if (teteClasse1 && nonTete2) {
         Logger.log(`\nTest swap: ${teteClasse1.ID_ELEVE} (tête, ${classes[i]}) <-> ${nonTete2.ID_ELEVE} (non-tête, ${classes[j]})`);
         
-        const poidsTest = { tetesDeClasse: 3.0, niveau1: 2.5, distribution: 1.5, com1: 0, tra4: 0, part4: 0 };
+        const poidsTest = { tetesDeClasse: 3.0, niveau1: 2.5, distribution: 1.5, equilibreForces: 2.2, com1: 0, tra4: 0, part4: 0 };
         const impact = evaluerImpactDistribution(
           teteClasse1, nonTete2, classesMap, statsInitiales, poidsTest, () => 0
         );
@@ -3747,21 +3893,23 @@ function analyserDistributionClasses(classesMap) {
       total: eleves.length,
       tetes: eleves.filter(e => e.estTeteDeClasse).length,
       niveau1: eleves.filter(e => e.estNiveau1).length,
-      distribution: { 1: 0, 2: 0, 3: 0, 4: 0 }
+      distribution: { 1: 0, 2: 0, 3: 0, 4: 0 },
+      force: computeClassStrengthScore(eleves, CLASS_STRENGTH_WEIGHTS)
     };
-    
+
     eleves.forEach(e => {
       const niv = e.niveauCOM || 1;
       if (stats.distribution[niv] !== undefined) {
         stats.distribution[niv]++;
       }
     });
-    
+
     Logger.log(`${classe}: ${stats.total} élèves, ${stats.tetes} têtes, ${stats.niveau1} niv1`);
     const distribStr = Object.entries(stats.distribution)
       .map(([niv, count]) => `${niv}:${count}`)
       .join(' ');
     Logger.log(`  Distribution COM: ${distribStr}`);
+    Logger.log(`  Force composite: ${stats.force.toFixed(3)}`);
   });
 }
 
@@ -3904,7 +4052,7 @@ function forcerSwapManuel() {
     const statsInitiales = calculerStatistiquesDistribution(classesMap, elevesResult.students.length, []);
     const impact = evaluerImpactDistributionAvecLogs(
       swapTrouve.eleve1, swapTrouve.eleve2, classesMap, statsInitiales,
-      { tetesDeClasse: 3.0, niveau1: 2.5, distribution: 1.5 }, () => 0
+      { tetesDeClasse: 3.0, niveau1: 2.5, distribution: 1.5, equilibreForces: 2.2 }, () => 0
     );
     
     return swapTrouve;
