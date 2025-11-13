@@ -1,6 +1,7 @@
 /**
  * ===================================================================
  * PHASES 1-2-3-4 V3 - _BASEOPTI COMME VIVIER UNIQUE
+ * ⚡ OPTIMUM PRIME MASTER - VERSION OPTIMISÉE
  * ===================================================================
  *
  * Architecture correcte :
@@ -8,6 +9,17 @@
  * - Colonne _CLASS_ASSIGNED pour marquer les affectations
  * - Toutes les phases lisent/écrivent dans _BASEOPTI
  * - CACHE rempli à la fin uniquement
+ *
+ * 🚀 OPTIMISATIONS OPTIMUM PRIME (branche: claude/optimum-prime-master) :
+ * 1. ✅ FIX CRITIQUE : Bug s1/s2 dans findBestSwap_V3 (variables non définies)
+ * 2. ⚡ Performance : Ajout paramètres pos1/pos2 pour accès direct aux indices
+ * 3. 📊 Métriques : Compteurs tested, blockedByMobility, blockedByDissoAsso
+ * 4. 🔄 Boucle Phase4 : Ajout boucle for() manquante + targetDistribution
+ * 5. 🛑 Early stopping : Détection stagnation + limite maxSwaps
+ * 6. 🧹 Nettoyage : Suppression code mort (currentScore, finalError)
+ *
+ * Basé sur : codex/audit-du-pipeline-opti (2000 lignes, version la plus complète)
+ * Date : 2025-11-13
  */
 
 // ===================================================================
@@ -1143,16 +1155,23 @@ function Phase4_balanceScoresSwaps_BASEOPTI_V3(ctx) {
   logLine('INFO', '  ↳ Harmonie académique pondérée : ' + initialAcademic.toFixed(2));
   logLine('INFO', '  ↳ Parité (écart total F/M) : ' + initialParity.toFixed(2));
 
+  // ✅ OPTIMUM PRIME: Calculer distribution cible pour l'harmonie
+  const targetDistribution = calculateTargetDistribution_V3(data, headers, byClass);
+
   // Optimisation par swaps
   let swapsApplied = 0;
   const maxSwaps = ctx.maxSwaps || 500;
-  let currentScore = calculateCompositeSwapScore_V3(data, headers, byClass, targetDistribution, weights, null);
 
   let bestComposite = initialComposite;
   let stagnation = 0;
 
-    if (!swap || swap.score <= 0) {
-      logLine('INFO', '  🛑 Plus de swap bénéfique trouvé (score=' + (swap ? swap.score.toFixed(3) : 'null') + ').');
+  // ⚡ OPTIMUM PRIME: Boucle d'optimisation avec early stopping intelligent
+  for (let iter = 0; iter < maxSwaps; iter++) {
+    // Trouver le meilleur swap possible
+    const swap = findBestSwap_V3(data, headers, byClass, targetDistribution, weights, ctx);
+
+    if (!swap || !swap.compositeGain || swap.compositeGain <= 0) {
+      logLine('INFO', '  🛑 Plus de swap bénéfique trouvé (compositeGain=' + (swap && swap.compositeGain ? swap.compositeGain.toFixed(3) : 'null') + ').');
       break;
     }
 
@@ -1170,7 +1189,7 @@ function Phase4_balanceScoresSwaps_BASEOPTI_V3(ctx) {
     if (pos2 !== -1) byClass[cls2].splice(pos2, 1, idx1);
 
     swapsApplied++;
-    currentScore -= swap.score; // Mettre à jour le score (le score du swap est un gain)
+    // ✅ OPTIMUM PRIME: Tracker le gain composite (pas de currentScore nécessaire)
 
     if (swapsApplied % 10 === 0) {
       const metrics = calculateCompositeScore_V3(data, headers, byClass, weights);
@@ -1197,9 +1216,7 @@ function Phase4_balanceScoresSwaps_BASEOPTI_V3(ctx) {
   copyBaseoptiToCache_V3(ctx);
   if (typeof computeMobilityFlags_ === 'function') computeMobilityFlags_(ctx);
 
-  const finalError = calculateCompositeSwapScore_V3(data, headers, byClass, targetDistribution, weights, null);
-  const totalImprovement = (currentScore > 0 ? currentScore : finalError) - finalError; // Correction si aucun swap n'a été fait
-
+  // ✅ OPTIMUM PRIME: Calcul des métriques finales
   const finalMetrics = calculateCompositeScore_V3(data, headers, byClass, weights);
   const finalAcademic = finalMetrics.academic;
   const finalParity = finalMetrics.parity;
@@ -1496,11 +1513,19 @@ function findBestSwap_V3(data, headers, byClass, targetDistribution, weights, ct
       const cls1 = classes[i];
       const cls2 = classes[j];
 
-      byClass[cls1].forEach(idx1 => {
-        if (String(data[idx1][idxMobilite] || '').toUpperCase() === 'FIXE' || String(data[idx1][idxFixe] || '').toUpperCase() === 'FIXE') return;
+      byClass[cls1].forEach((idx1, pos1) => {
+        if (String(data[idx1][idxMobilite] || '').toUpperCase() === 'FIXE' || String(data[idx1][idxFixe] || '').toUpperCase() === 'FIXE') {
+          blockedByMobility++;
+          return;
+        }
 
-        byClass[cls2].forEach(idx2 => {
-          if (String(data[idx2][idxMobilite] || '').toUpperCase() === 'FIXE' || String(data[idx2][idxFixe] || '').toUpperCase() === 'FIXE') return;
+        byClass[cls2].forEach((idx2, pos2) => {
+          if (String(data[idx2][idxMobilite] || '').toUpperCase() === 'FIXE' || String(data[idx2][idxFixe] || '').toUpperCase() === 'FIXE') {
+            blockedByMobility++;
+            return;
+          }
+
+          tested++;
 
           if (enforceParityTolerance) {
             const sexe1 = String(data[idx1][idxSexe] || '').toUpperCase();
@@ -1515,13 +1540,16 @@ function findBestSwap_V3(data, headers, byClass, targetDistribution, weights, ct
 
             if (Math.abs(after1F - after1M) > parityTolerance || Math.abs(after2F - after2M) > parityTolerance) {
               blockedByParity++;
-              continue;
+              return;
             }
           }
 
           // 🔒 VÉRIFIER CONTRAINTES DISSO/ASSO/LV2/OPT avant le swap
           const swapCheck = canSwapStudents_V3(idx1, cls1, idx2, cls2, data, headers, ctx);
-          if (!swapCheck.ok) return;
+          if (!swapCheck.ok) {
+            blockedByDissoAsso++;
+            return;
+          }
 
           // Simuler le swap
           const saved1 = data[idx1][idxAssigned];
@@ -1530,9 +1558,11 @@ function findBestSwap_V3(data, headers, byClass, targetDistribution, weights, ct
           data[idx1][idxAssigned] = cls2;
           data[idx2][idxAssigned] = cls1;
 
-          // Update temporaire byClass
-          byClass[cls1][s1] = idx2;
-          byClass[cls2][s2] = idx1;
+          // ✅ FIX CRITIQUE: Update temporaire byClass avec positions correctes
+          const savedByClass1 = byClass[cls1][pos1];
+          const savedByClass2 = byClass[cls2][pos2];
+          byClass[cls1][pos1] = idx2;
+          byClass[cls2][pos2] = idx1;
 
           // Calculer nouveau score composite
           const candidateMetrics = calculateCompositeScore_V3(data, headers, byClass, weights);
@@ -1546,11 +1576,11 @@ function findBestSwap_V3(data, headers, byClass, targetDistribution, weights, ct
           const deltaPART = (currentDistributionErrors.PART || 0) - (candidateMetrics.distributionErrors.PART || 0);
           const deltaABS = (currentDistributionErrors.ABS || 0) - (candidateMetrics.distributionErrors.ABS || 0);
 
-          // Restaurer
+          // ✅ Restaurer état original
           data[idx1][idxAssigned] = saved1;
           data[idx2][idxAssigned] = saved2;
-          byClass[cls1][s1] = idx1;
-          byClass[cls2][s2] = idx2;
+          byClass[cls1][pos1] = savedByClass1;
+          byClass[cls2][pos2] = savedByClass2;
 
           // Décider si ce swap est meilleur
           let takeThisSwap = false;
