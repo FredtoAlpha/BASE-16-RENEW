@@ -1115,16 +1115,14 @@ function Phase4_balanceScoresSwaps_BASEOPTI_V3(ctx) {
   logLine('INFO', '='.repeat(80));
 
   // Récupérer poids (depuis UI ou défaut)
-  const defaultWeights = {
-    com: 1.0,  // Priorité MAXIMALE
-    tra: 0.7,
-    part: 0.4,
-    abs: 0.2,
-    parity: 0.3
+  const weights = ctx.weights || {
+    parity: 1.0,
+    com: 1.0,
+    tra: 0.5,
+    part: 0.3,
+    abs: 0.2
   };
-  const weights = Object.assign({}, defaultWeights, ctx.weights || {});
-
-  logLine('INFO', '⚖️ Poids : COM=' + weights.com + ', TRA=' + weights.tra + ', PART=' + weights.part + ', ABS=' + weights.abs + ', Parité=' + weights.parity);
+  logLine('INFO', '⚖️ Poids : PARITY=' + (weights.parity || 0) + ', COM=' + (weights.com || 0) + ', TRA=' + (weights.tra || 0) + ', PART=' + (weights.part || 0) + ', ABS=' + (weights.abs || 0));
 
   const ss = ctx.ss || SpreadsheetApp.getActive();
   const baseSheet = ss.getSheetByName('_BASEOPTI');
@@ -1141,19 +1139,8 @@ function Phase4_balanceScoresSwaps_BASEOPTI_V3(ctx) {
     }
   }
 
-  logLine('INFO', '📖 Élèves par classe :');
-  for (const cls in byClass) {
-    logLine('INFO', '  ' + cls + ' : ' + byClass[cls].length + ' élèves');
-  }
-
-  // Calculer score composite initial (harmonie académique + parité)
-  const initialMetrics = calculateCompositeScore_V3(data, headers, byClass, weights);
-  const initialAcademic = initialMetrics.academic;
-  const initialParity = initialMetrics.parity;
-  const initialComposite = initialMetrics.composite;
-  logLine('INFO', '🎯 Score composite initial : ' + initialComposite.toFixed(2) + ' (plus bas = mieux)');
-  logLine('INFO', '  ↳ Harmonie académique pondérée : ' + initialAcademic.toFixed(2));
-  logLine('INFO', '  ↳ Parité (écart total F/M) : ' + initialParity.toFixed(2));
+  // Calculer la distribution cible
+  const targetDistribution = calculateTargetDistribution_V3(data, headers, byClass);
 
   // ✅ OPTIMUM PRIME: Calculer distribution cible pour l'harmonie
   const targetDistribution = calculateTargetDistribution_V3(data, headers, byClass);
@@ -1162,8 +1149,9 @@ function Phase4_balanceScoresSwaps_BASEOPTI_V3(ctx) {
   let swapsApplied = 0;
   const maxSwaps = ctx.maxSwaps || 500;
 
-  let bestComposite = initialComposite;
-  let stagnation = 0;
+  for (let iter = 0; iter < maxSwaps * 5 && swapsApplied < maxSwaps; iter++) {
+    // Trouver le meilleur swap
+    const swap = findBestSwap_V3(data, headers, byClass, targetDistribution, weights, ctx);
 
   // ⚡ OPTIMUM PRIME: Boucle d'optimisation avec early stopping intelligent
   for (let iter = 0; iter < maxSwaps; iter++) {
@@ -1191,22 +1179,8 @@ function Phase4_balanceScoresSwaps_BASEOPTI_V3(ctx) {
     swapsApplied++;
     // ✅ OPTIMUM PRIME: Tracker le gain composite (pas de currentScore nécessaire)
 
-    if (swapsApplied % 10 === 0) {
-      const metrics = calculateCompositeScore_V3(data, headers, byClass, weights);
-      const improvement = initialComposite - metrics.composite; // Positif = amélioration
-      logLine('INFO', '  📊 ' + swapsApplied + ' swaps | harmonie=' + metrics.academic.toFixed(2) + ' | parité=' + metrics.parity.toFixed(2) + ' | composite=' + metrics.composite.toFixed(2) + ' | amélioration=' + improvement.toFixed(2));
-
-      if (metrics.composite >= bestComposite - 1e-6) {
-        stagnation++;
-      } else {
-        bestComposite = metrics.composite;
-        stagnation = 0;
-      }
-
-      if (stagnation >= 5) {
-        logLine('INFO', '  ⏸️ Stagnation détectée');
-        break;
-      }
+    if (swapsApplied % 20 === 0) {
+      logLine('INFO', '  🔄 ' + swapsApplied + ' swaps | Score actuel (erreur): ' + currentScore.toFixed(2) + ' | Dernier gain: ' + swap.score.toFixed(3));
     }
   }
 
@@ -1235,27 +1209,11 @@ function Phase4_balanceScoresSwaps_BASEOPTI_V3(ctx) {
     distributionImprovements[key] = initialValue - finalValue;
   });
 
-  // ✅ AUDIT COMPLET : Générer un rapport détaillé de fin d'optimisation
-  const auditReport = generateOptimizationAudit_V3(ctx, data, headers, byClass, finalDist, {
-    initialAcademic: initialAcademic,
-    finalAcademic: finalAcademic,
-    academicImprovement: academicImprovement,
-    initialParity: initialParity,
-    finalParity: finalParity,
-    parityImprovement: parityImprovement,
-    initialComposite: initialComposite,
-    finalComposite: finalComposite,
-    compositeImprovement: compositeImprovement,
-    initialDistributionErrors: initialMetrics.distributionErrors,
-    finalDistributionErrors: finalMetrics.distributionErrors,
-    distributionImprovements: distributionImprovements,
-    weights: {
-      com: weights.com,
-      tra: weights.tra,
-      part: weights.part,
-      abs: weights.abs,
-      parity: weights.parity
-    },
+  // Générer le rapport d'audit
+  const auditReport = generateOptimizationAudit_V3(ctx, data, headers, byClass, null, {
+    initialError: currentScore + totalImprovement, // Reconstituer l'erreur initiale
+    finalError: finalError,
+    totalImprovement: totalImprovement,
     swapsApplied: swapsApplied
   });
 
@@ -1299,85 +1257,34 @@ function calculateTargetDistribution_V3(data, headers, byClass) {
   return targetDistribution;
 }
 
-function calculateDistributionTargets_V3(distributions, byClass) {
-  const criteria = ['COM', 'TRA', 'PART', 'ABS'];
-  const scores = [1, 2, 3, 4];
-
-  const globalCounts = {};
-  const proportions = {};
-  const targets = {};
-
-  let totalStudents = 0;
-
-  criteria.forEach(function(criterion) {
-    globalCounts[criterion] = { 1: 0, 2: 0, 3: 0, 4: 0 };
-  });
+/**
+ * Calcule "l'erreur d'harmonie" pour un critère et une répartition donnés.
+ */
+function calculateHarmonyError_V3(byClass, data, headers, criterion, targetDistribution) {
+  const idx = headers.indexOf(criterion);
+  let totalError = 0;
 
   for (const cls in byClass) {
-    totalStudents += byClass[cls].length;
-  }
+    const classSize = byClass[cls].length;
+    const currentCounts = { '1': 0, '2': 0, '3': 0, '4': 0 };
 
-  for (const cls in distributions) {
-    criteria.forEach(function(criterion) {
-      scores.forEach(function(score) {
-        globalCounts[criterion][score] += distributions[cls][criterion][score] || 0;
-      });
-    });
-  }
-
-  criteria.forEach(function(criterion) {
-    proportions[criterion] = {};
-    scores.forEach(function(score) {
-      proportions[criterion][score] = totalStudents > 0
-        ? globalCounts[criterion][score] / totalStudents
-        : 0;
+    byClass[cls].forEach(studentIdx => {
+      const score = String(data[studentIdx][idx] || '3');
+      if (currentCounts[score]) currentCounts[score]++; else currentCounts[score] = 1;
     });
 
-  for (const cls in byClass) {
-    const size = byClass[cls].length;
-    targets[cls] = {};
-    criteria.forEach(function(criterion) {
-      targets[cls][criterion] = {};
-      scores.forEach(function(score) {
-        targets[cls][criterion][score] = proportions[criterion][score] * size;
-      });
-    });
+    for (let s = 1; s <= 4; s++) {
+      const targetCount = targetDistribution[criterion][s] * classSize;
+      totalError += Math.abs(currentCounts[s] - targetCount);
+    }
   }
-
-  return {
-    totalStudents: totalStudents,
-    globalCounts: globalCounts,
-    proportions: proportions,
-    targets: targets
-  };
+  return totalError;
 }
 
-function calculateDistributionErrors_V3(distributions, targets) {
-  const criteria = ['COM', 'TRA', 'PART', 'ABS'];
-  const scores = [1, 2, 3, 4];
-  const errors = {
-    COM: 0,
-    TRA: 0,
-    PART: 0,
-    ABS: 0
-  };
-
-  for (const cls in distributions) {
-    criteria.forEach(function(criterion) {
-      scores.forEach(function(score) {
-        const actual = distributions[cls][criterion][score] || 0;
-        const target = targets[cls] && targets[cls][criterion]
-          ? targets[cls][criterion][score] || 0
-          : 0;
-        errors[criterion] += Math.abs(actual - target);
-      });
-    });
-  }
-
-  return errors;
-}
-
-function calculateParityPenalty_V3(data, headers, byClass) {
+/**
+ * Calcule le score de parité (somme des |F-M|).
+ */
+function calculateParityError_V3(byClass, data, headers) {
   const idxSexe = headers.indexOf('SEXE');
   let totalParityGap = 0;
   for (const cls in byClass) {
@@ -1391,42 +1298,7 @@ function calculateParityPenalty_V3(data, headers, byClass) {
 }
 
 /**
- * Calcule un score composite combinant l'harmonie académique (répartition 1/2/3/4)
- * et une pénalité de parité globale.
- * @returns {{
- *   composite:number,
- *   parity:number,
- *   academic:number,
- *   distributionErrors:Object,
- *   targets:Object
- * }}
- */
-function calculateCompositeScore_V3(data, headers, byClass, weights) {
-  const distributions = calculateScoreDistributions_V3(data, headers, byClass);
-  const targetsInfo = calculateDistributionTargets_V3(distributions, byClass);
-  const distributionErrors = calculateDistributionErrors_V3(distributions, targetsInfo.targets);
-
-  const academicWeighted =
-    (weights.com || 0) * distributionErrors.COM +
-    (weights.tra || 0) * distributionErrors.TRA +
-    (weights.part || 0) * distributionErrors.PART +
-    (weights.abs || 0) * distributionErrors.ABS;
-
-  const parityPenalty = calculateParityPenalty_V3(data, headers, byClass);
-  const parityWeight = typeof weights.parity === 'number' ? weights.parity : 0;
-  const composite = academicWeighted + parityWeight * parityPenalty;
-
-  return {
-    composite: composite,
-    parity: parityPenalty,
-    academic: academicWeighted,
-    distributionErrors: distributionErrors,
-    targets: targetsInfo
-  };
-}
-
-/**
- * Trouve le meilleur swap possible en minimisant le score composite (harmonie académique + parité).
+ * Calcule le score composite d'une répartition (erreur totale à minimiser).
  */
 function calculateCompositeSwapScore_V3(data, headers, byClass, targetDistribution, weights, swap) {
   const criteria = ['COM', 'TRA', 'PART', 'ABS'];
@@ -1466,48 +1338,12 @@ function findBestSwap_V3(data, headers, byClass, targetDistribution, weights, ct
   const idxAssigned = headers.indexOf('_CLASS_ASSIGNED');
   const idxSexe = headers.indexOf('SEXE');
 
-  const parityTolerance = (typeof ctx.parityTolerance === 'number' && ctx.parityTolerance >= 0)
-    ? ctx.parityTolerance
-    : Infinity;
-  const enforceParityTolerance = idxSexe >= 0 && isFinite(parityTolerance) && (weights.parity === undefined || weights.parity > 0);
-
-  const currentMetrics = calculateCompositeScore_V3(data, headers, byClass, weights);
-  const currentComposite = currentMetrics.composite;
-  const currentParity = currentMetrics.parity;
-  const currentDistributionErrors = currentMetrics.distributionErrors;
-
   let bestSwap = null;
-  let bestCompositeGain = 1e-6; // Seuil minimum d'amélioration du score composite
-  let bestDeltaCOM = -Infinity;
-  let bestDeltaTRA = -Infinity;
-  let bestDeltaPART = -Infinity;
-  let bestDeltaABS = -Infinity;
-  let bestDeltaParity = -Infinity;
+  let bestScoreGain = 0.001; // Seuil minimum
 
-  // 📊 Compteurs de debug
-  let tested = 0;
-  let blockedByMobility = 0;
-  let blockedByDissoAsso = 0;
-  let blockedByParity = 0;
-  let noImprovement = 0;
+  const errorBefore = calculateCompositeSwapScore_V3(data, headers, byClass, targetDistribution, weights, null);
 
   const classes = Object.keys(byClass);
-
-  const classParitySnapshot = {};
-  if (enforceParityTolerance) {
-    classes.forEach(function(cls) {
-      let countF = 0;
-      let countM = 0;
-      byClass[cls].forEach(function(idx) {
-        const sexe = String(data[idx][idxSexe] || '').toUpperCase();
-        if (sexe === 'F') countF++;
-        else if (sexe === 'M') countM++;
-      });
-      classParitySnapshot[cls] = { F: countF, M: countM };
-    });
-  }
-
-  // Essayer swaps entre paires de classes
   for (let i = 0; i < classes.length; i++) {
     for (let j = i + 1; j < classes.length; j++) {
       const cls1 = classes[i];
@@ -1601,38 +1437,13 @@ function findBestSwap_V3(data, headers, byClass, targetDistribution, weights, ct
             }
           }
 
-          if (takeThisSwap) {
-            bestCompositeGain = compositeGain;
-            bestDeltaCOM = deltaCOM;
-            bestDeltaTRA = deltaTRA;
-            bestDeltaPART = deltaPART;
-            bestDeltaABS = deltaABS;
-            bestDeltaParity = parityGain;
-            bestSwap = {
-              idx1: idx1,
-              idx2: idx2,
-              compositeGain: compositeGain,
-              parityGain: parityGain,
-              deltas: {
-                COM: deltaCOM,
-                TRA: deltaTRA,
-                PART: deltaPART,
-                ABS: deltaABS
-              }
-            };
-          } else {
-            noImprovement++;
+          if (scoreGain > bestScoreGain) {
+            bestScoreGain = scoreGain;
+            bestSwap = { idx1, idx2, score: bestScoreGain };
           }
         });
       });
     }
-  }
-
-  // 📊 Log des statistiques de recherche
-  if (tested > 0 || blockedByMobility > 0 || blockedByDissoAsso > 0 || blockedByParity > 0) {
-    logLine('INFO', '  🔍 Recherche swap : ' + tested + ' testés, ' + blockedByMobility + ' bloqués (mobilité), ' +
-            blockedByDissoAsso + ' bloqués (DISSO/ASSO), ' + blockedByParity + ' bloqués (parité), ' +
-            noImprovement + ' sans amélioration');
   }
 
   return bestSwap;
