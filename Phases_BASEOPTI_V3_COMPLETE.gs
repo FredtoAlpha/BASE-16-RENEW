@@ -127,6 +127,10 @@ function Phase2I_applyDissoAsso_BASEOPTI_V3(ctx) {
   const ss = ctx.ss || SpreadsheetApp.getActive();
   const baseSheet = ss.getSheetByName('_BASEOPTI');
 
+  if (!baseSheet) {
+    throw new Error('_BASEOPTI introuvable');
+  }
+
   const data = baseSheet.getDataRange().getValues();
   const headers = data[0];
 
@@ -644,186 +648,393 @@ function Phase3I_completeAndParity_BASEOPTI_V3(ctx) {
   const ss = ctx.ss || SpreadsheetApp.getActive();
   const baseSheet = ss.getSheetByName('_BASEOPTI');
 
+  if (!baseSheet) {
+    throw new Error('_BASEOPTI introuvable');
+  }
+
   const data = baseSheet.getDataRange().getValues();
   const headers = data[0];
 
   const idxAssigned = headers.indexOf('_CLASS_ASSIGNED');
   const idxSexe = headers.indexOf('SEXE');
-  const idxA = headers.indexOf('ASSO');
+  const idxId = headers.indexOf('ID');
 
-  // Calculer besoins par classe
-  const needs = {};
-  (ctx.levels || []).forEach(function(cls) {
-    const target = (ctx.targets && ctx.targets[cls]) || 0;
-    let current = 0;
-
-    for (let i = 1; i < data.length; i++) {
-      if (String(data[i][idxAssigned] || '').trim() === cls) {
-        current++;
-      }
-    }
-
-    needs[cls] = { target: target, current: current, need: target - current };
-  });
-
-  logLine('INFO', '📊 Besoins :');
-  for (const cls in needs) {
-    logLine('INFO', '  ' + cls + ' : ' + needs[cls].current + '/' + needs[cls].target + ' (besoin=' + needs[cls].need + ')');
+  if (idxAssigned === -1) {
+    throw new Error('Colonne _CLASS_ASSIGNED introuvable');
+  }
+  if (idxSexe === -1) {
+    throw new Error('Colonne SEXE introuvable');
   }
 
-  // Créer pools F et M (non assignés)
+  const classNames = Array.isArray(ctx.levels) ? ctx.levels.slice() : [];
+  const targetMap = ctx.targets || {};
+  for (const cls in targetMap) {
+    if (classNames.indexOf(cls) === -1) {
+      classNames.push(cls);
+    }
+  }
+
+  const classes = [];
+  const classByName = {};
+  classNames.forEach(function(name) {
+    const targetTotal = Number(targetMap[name] || 0);
+    const entry = {
+      name: name,
+      targetTotal: targetTotal,
+      currentF: 0,
+      currentM: 0,
+      slotsLeft: 0,
+      pendingF: 0,
+      pendingM: 0,
+      targetF_total: 0,
+      targetM_total: 0,
+      targetF_newSlots: 0,
+      targetM_newSlots: 0
+    };
+    classes.push(entry);
+    classByName[name] = entry;
+  });
+
   const poolF = [];
   const poolM = [];
 
   for (let i = 1; i < data.length; i++) {
     const assigned = String(data[i][idxAssigned] || '').trim();
-    if (assigned) continue; // Déjà placé
+    const sexe = String(data[i][idxSexe] || '').trim().toUpperCase();
 
-    const sexe = String(data[i][idxSexe] || '').toUpperCase();
-    if (sexe === 'F') {
-      poolF.push(i);
-    } else if (sexe === 'M') {
-      poolM.push(i);
+    if (assigned && classByName[assigned]) {
+      if (sexe === 'F') {
+        classByName[assigned].currentF++;
+      } else if (sexe === 'M') {
+        classByName[assigned].currentM++;
+      }
+    } else if (!assigned) {
+      if (sexe === 'F') {
+        poolF.push(i);
+      } else if (sexe === 'M') {
+        poolM.push(i);
+      }
     }
   }
+
+  classes.forEach(function(cls) {
+    const filled = cls.currentF + cls.currentM;
+    cls.slotsLeft = Math.max(0, cls.targetTotal - filled);
+  });
+
+  logLine('INFO', '📊 Besoins par classe :');
+  classes.forEach(function(cls) {
+    logLine('INFO', '  ' + cls.name + ' : ' + cls.currentF + 'F/' + cls.currentM + 'M (cible=' + cls.targetTotal + ', slots restants=' + cls.slotsLeft + ')');
+  });
 
   logLine('INFO', '👥 Pool disponible : ' + poolF.length + ' F, ' + poolM.length + ' M');
 
-  // 🎯 CALCULER LE RATIO F/M IDÉAL (basé sur les totaux réels)
-  let totalF = 0, totalM = 0;
-  for (let i = 1; i < data.length; i++) {
-    const sexe = String(data[i][idxSexe] || '').toUpperCase();
-    if (sexe === 'F') totalF++;
-    else if (sexe === 'M') totalM++;
+  const parityTolerance = typeof ctx.parityTolerance === 'number' ? ctx.parityTolerance : 0;
+
+  const totalSlots = classes.reduce(function(sum, cls) {
+    return sum + cls.slotsLeft;
+  }, 0);
+  const totalPool = poolF.length + poolM.length;
+  const ratioF = totalPool > 0 ? poolF.length / totalPool : 0.5;
+  const ratioM = 1 - ratioF;
+
+  logLine('INFO', '⚖️ Ratio F/M basé sur le vivier restant : ' + (ratioF * 100).toFixed(1) + '% F / ' + (ratioM * 100).toFixed(1) + '% M');
+
+  if (totalPool < totalSlots) {
+    logLine('WARN', '⚠️ Vivier insuffisant pour remplir toutes les classes : ' + totalPool + ' élèves pour ' + totalSlots + ' places');
   }
 
-  const totalEleves = totalF + totalM;
-  const ratioF = totalEleves > 0 ? totalF / totalEleves : 0.5;
-  const ratioM = totalEleves > 0 ? totalM / totalEleves : 0.5;
+  const capacity = Math.min(totalSlots, totalPool);
+  const targetFGlobalExact = totalSlots * ratioF;
+  let targetFGlobal = Math.round(targetFGlobalExact);
+  targetFGlobal = Math.min(targetFGlobal, poolF.length, capacity);
+  let targetMGlobal = Math.min(poolM.length, capacity - targetFGlobal);
+  let allocated = targetFGlobal + targetMGlobal;
+  if (allocated < capacity) {
+    const remaining = capacity - allocated;
+    const extraF = Math.min(poolF.length - targetFGlobal, remaining);
+    targetFGlobal += extraF;
+    allocated += extraF;
+    const extraM = Math.min(poolM.length - targetMGlobal, capacity - allocated);
+    targetMGlobal += extraM;
+    allocated += extraM;
+  }
+  logLine('INFO', '🎯 Quota global Phase 3 : ' + targetFGlobal + ' F / ' + targetMGlobal + ' M (slots=' + totalSlots + ', capacité=' + capacity + ')');
+  const unreachableSlots = totalSlots - capacity;
+  if (unreachableSlots > 0) {
+    logLine('WARN', '⚠️ ' + unreachableSlots + " places ne pourront pas être pourvues faute d'élèves disponibles");
+  }
 
-  logLine('INFO', '⚖️ Ratio F/M global : ' + (ratioF * 100).toFixed(1) + '% F / ' + (ratioM * 100).toFixed(1) + '% M');
-  logLine('INFO', '   Total : ' + totalF + ' F, ' + totalM + ' M (' + totalEleves + ' élèves)');
-
-  // Compléter chaque classe
-  const classOrder = Object.keys(needs).sort(function(a, b) {
-    return needs[b].need - needs[a].need;
+  const targets = [];
+  let sumBaseFTotal = 0;
+  classes.forEach(function(cls) {
+    const exactFTotal = cls.targetTotal * ratioF;
+    let baseF = Math.floor(exactFTotal);
+    if (baseF < 0) baseF = 0;
+    if (baseF > cls.targetTotal) baseF = cls.targetTotal;
+    const remainder = exactFTotal - baseF;
+    targets.push({
+      classInfo: cls,
+      baseF: baseF,
+      remainder: remainder
+    });
+    sumBaseFTotal += baseF;
   });
 
-  for (let c = 0; c < classOrder.length; c++) {
-    const classe = classOrder[c];
-    let need = needs[classe].need;
+  let remainingFGlobal = Math.max(0, targetFGlobal - sumBaseFTotal);
+  targets.sort(function(a, b) {
+    if (b.remainder === a.remainder) {
+      return a.classInfo.name.localeCompare(b.classInfo.name);
+    }
+    return b.remainder - a.remainder;
+  });
+  for (let i = 0; i < targets.length && remainingFGlobal > 0; i++) {
+    const info = targets[i];
+    if (info.baseF >= info.classInfo.targetTotal) continue;
+    info.baseF++;
+    remainingFGlobal--;
+  }
+  if (remainingFGlobal > 0) {
+    for (let i = 0; i < targets.length && remainingFGlobal > 0; i++) {
+      const info = targets[i];
+      if (info.baseF >= info.classInfo.targetTotal) continue;
+      info.baseF++;
+      remainingFGlobal--;
+    }
+  }
 
-    if (need <= 0) continue;
+  targets.forEach(function(target) {
+    const cls = target.classInfo;
+    cls.targetF_total = Math.min(cls.targetTotal, Math.max(0, target.baseF));
+    cls.targetM_total = Math.max(0, cls.targetTotal - cls.targetF_total);
+    const remainingFForClass = Math.max(0, cls.targetF_total - cls.currentF);
+    const localSlots = cls.slotsLeft;
+    cls.targetF_newSlots = Math.min(remainingFForClass, localSlots);
+    cls.targetM_newSlots = Math.max(0, localSlots - cls.targetF_newSlots);
+  });
 
-    logLine('INFO', '  🔄 Complétion de ' + classe + ' (' + need + ' élèves)');
+  logLine('INFO', '📌 Quotas cibles (méthode des plus forts restes) :');
+  classes.forEach(function(cls) {
+    logLine('INFO', '  ' + cls.name + ' -> cible finale ' + cls.targetF_total + 'F/' + cls.targetM_total + 'M (slots F restants=' + cls.targetF_newSlots + ', slots M restants=' + cls.targetM_newSlots + ')');
+  });
 
-    // Compter F/M actuels
-    let countF = 0, countM = 0;
-    for (let i = 1; i < data.length; i++) {
-      if (String(data[i][idxAssigned] || '').trim() === classe) {
-        const sexe = String(data[i][idxSexe] || '').toUpperCase();
-        if (sexe === 'F') countF++;
-        else if (sexe === 'M') countM++;
-      }
+  function globalNeed(sex, targetF, targetM, placedF, placedM) {
+    return sex === 'F' ? targetF - placedF : targetM - placedM;
+  }
+
+  function decideSexForSeat(cls, meta) {
+    const finalF = cls.currentF + cls.pendingF;
+    const finalM = cls.currentM + cls.pendingM;
+    const targetF = cls.targetF_total;
+    const targetM = cls.targetM_total;
+    const diffF = targetF - finalF;
+    const diffM = targetM - finalM;
+    const withinTol = Math.abs(diffF) <= meta.parityTolerance && Math.abs(diffM) <= meta.parityTolerance;
+    const poolFSize = meta.poolF.length;
+    const poolMSize = meta.poolM.length;
+
+    if (poolFSize === 0 && poolMSize === 0) {
+      return null;
     }
 
-    // 🎯 Calculer la cible F/M idéale pour cette classe
-    const targetTotal = needs[classe].target;
-    const targetF = Math.round(targetTotal * ratioF);
-    const targetM = targetTotal - targetF;
-
-    logLine('INFO', '    🎯 Cible parité : ' + targetF + 'F / ' + targetM + 'M (actuel : ' + countF + 'F / ' + countM + 'M)');
-
-    // Placement selon ratio F/M idéal AVEC VALIDATION DISSO/ASSO
-    let blocked = 0;
-    while (need > 0 && (poolF.length > 0 || poolM.length > 0)) {
-      // ✅ Décision basée sur l'écart par rapport à la cible idéale
-      const ecartF = countF - targetF;
-      const ecartM = countM - targetM;
-      const wantF = ecartF < ecartM; // Prendre F si on est plus loin de la cible F que de la cible M
-
-      let idx = null;
-      let selectedPool = null;
-
-      // 🔒 Chercher un élève compatible dans le pool préféré
-      if (wantF && poolF.length > 0) {
-        for (let i = 0; i < poolF.length; i++) {
-          const check = canPlaceInClass_V3(poolF[i], classe, data, headers);
-          if (check.ok) {
-            idx = poolF.splice(i, 1)[0];
-            selectedPool = 'F';
-            break;
-          }
-        }
-      } else if (!wantF && poolM.length > 0) {
-        for (let i = 0; i < poolM.length; i++) {
-          const check = canPlaceInClass_V3(poolM[i], classe, data, headers);
-          if (check.ok) {
-            idx = poolM.splice(i, 1)[0];
-            selectedPool = 'M';
-            break;
-          }
-        }
+    if (withinTol) {
+      if (poolFSize === 0) return poolMSize > 0 ? 'M' : null;
+      if (poolMSize === 0) return 'F';
+      const globalNeedF = globalNeed('F', meta.targetFGlobal, meta.targetMGlobal, meta.placedF, meta.placedM);
+      const globalNeedM = globalNeed('M', meta.targetFGlobal, meta.targetMGlobal, meta.placedF, meta.placedM);
+      if (globalNeedF > globalNeedM) return 'F';
+      if (globalNeedM > globalNeedF) return 'M';
+      if (globalNeedF <= 0 && globalNeedM <= 0) {
+        if (poolFSize > poolMSize) return 'F';
+        if (poolMSize > poolFSize) return 'M';
       }
+      return meta.lastSexUsed === 'F' ? 'M' : 'F';
+    }
 
-      // 🔒 Si pas trouvé, essayer l'autre pool
-      if (idx === null && poolF.length > 0) {
-        for (let i = 0; i < poolF.length; i++) {
-          const check = canPlaceInClass_V3(poolF[i], classe, data, headers);
-          if (check.ok) {
-            idx = poolF.splice(i, 1)[0];
-            selectedPool = 'F';
-            break;
-          }
-        }
+    if (diffF > diffM && diffF > 0) {
+      if (poolFSize > 0) return 'F';
+    } else if (diffM > diffF && diffM > 0) {
+      if (poolMSize > 0) return 'M';
+    } else {
+      if (diffF > 0 && poolFSize > 0) return 'F';
+      if (diffM > 0 && poolMSize > 0) return 'M';
+    }
+
+    const globalNeedF = globalNeed('F', meta.targetFGlobal, meta.targetMGlobal, meta.placedF, meta.placedM);
+    const globalNeedM = globalNeed('M', meta.targetFGlobal, meta.targetMGlobal, meta.placedF, meta.placedM);
+
+    if (globalNeedF > globalNeedM && poolFSize > 0) return 'F';
+    if (globalNeedM > globalNeedF && poolMSize > 0) return 'M';
+
+    if (poolFSize === 0 && poolMSize > 0) return 'M';
+    if (poolMSize === 0 && poolFSize > 0) return 'F';
+
+    if (poolFSize === 0 && poolMSize === 0) return null;
+
+    return meta.lastSexUsed === 'F' ? 'M' : 'F';
+  }
+
+  function pickStudentFromPool(sex, cls, poolF, poolM, data, headers, ctx) {
+    const pool = sex === 'F' ? poolF : poolM;
+    for (let i = 0; i < pool.length; i++) {
+      const idx = pool[i];
+      const check = canPlaceInClass_V3(idx, cls.name, data, headers, undefined, ctx);
+      if (check && check.ok) {
+        return { poolIndex: i, rowIndex: idx };
       }
+    }
+    return null;
+  }
 
-      if (idx === null && poolM.length > 0) {
-        for (let i = 0; i < poolM.length; i++) {
-          const check = canPlaceInClass_V3(poolM[i], classe, data, headers);
-          if (check.ok) {
-            idx = poolM.splice(i, 1)[0];
-            selectedPool = 'M';
-            break;
-          }
-        }
+  function parityPenaltyAfterPlacement(cls, sex, tolerance) {
+    const finalF = cls.currentF + cls.pendingF + (sex === 'F' ? 1 : 0);
+    const finalM = cls.currentM + cls.pendingM + (sex === 'M' ? 1 : 0);
+    const diffF = Math.abs(finalF - cls.targetF_total);
+    const diffM = Math.abs(finalM - cls.targetM_total);
+    const overTolF = Math.max(0, diffF - tolerance);
+    const overTolM = Math.max(0, diffM - tolerance);
+    return overTolF + overTolM;
+  }
+
+  function oppositeSex(sex) {
+    return sex === 'F' ? 'M' : 'F';
+  }
+
+  let lastSexUsed = 'M';
+  let placedF = 0;
+  let placedM = 0;
+
+  const targetTotals = { F: targetFGlobal, M: targetMGlobal };
+
+  let progress = true;
+  while (progress) {
+    progress = false;
+
+    for (let i = 0; i < classes.length; i++) {
+      const cls = classes[i];
+      if (cls.slotsLeft <= 0) {
+        continue;
       }
-
-      if (idx === null) {
-        blocked++;
-        logLine('WARN', '    ⚠️ Plus d\'élèves compatibles DISSO/ASSO pour ' + classe + ' (need=' + need + ')');
+      if (poolF.length + poolM.length === 0) {
         break;
       }
 
-      // ✅ Placement validé
-      data[idx][idxAssigned] = classe;
-      if (selectedPool === 'F') countF++;
-      else if (selectedPool === 'M') countM++;
-      need--;
-    }
+      const meta = {
+        parityTolerance: parityTolerance,
+        lastSexUsed: lastSexUsed,
+        targetFGlobal: targetTotals.F,
+        targetMGlobal: targetTotals.M,
+        placedF: placedF,
+        placedM: placedM,
+        poolF: poolF,
+        poolM: poolM
+      };
 
-    logLine('INFO', '    ✅ ' + classe + ' complété (' + countF + 'F/' + countM + 'M)');
+      let chosenSex = decideSexForSeat(cls, meta);
+      if (!chosenSex) {
+        logParityDecision(cls, {
+          type: 'SKIP_SLOT',
+          reason: 'no_decision_possible'
+        });
+        continue;
+      }
+
+      const primaryPoolSize = chosenSex === 'F' ? poolF.length : poolM.length;
+      let selection = pickStudentFromPool(chosenSex, cls, poolF, poolM, data, headers, ctx);
+      let fallbackUsed = false;
+      let penaltyPrimary = primaryPoolSize > 0 ? parityPenaltyAfterPlacement(cls, chosenSex, parityTolerance) : Infinity;
+
+      if (!selection) {
+        const altSex = oppositeSex(chosenSex);
+        const altSelection = pickStudentFromPool(altSex, cls, poolF, poolM, data, headers, ctx);
+        if (altSelection) {
+          const penaltyAlt = parityPenaltyAfterPlacement(cls, altSex, parityTolerance);
+          if (penaltyAlt <= penaltyPrimary) {
+            logParityDecision(cls, {
+              type: 'FALLBACK_SEX',
+              fromSex: chosenSex,
+              toSex: altSex,
+              reason: primaryPoolSize === 0 ? 'pool_empty_primary_sex' : 'no_compatible_candidate_primary_sex',
+              penaltyOriginal: penaltyPrimary,
+              penaltyFallback: penaltyAlt
+            });
+            selection = altSelection;
+            chosenSex = altSex;
+            fallbackUsed = true;
+          } else {
+            logParityDecision(cls, {
+              type: 'SKIP_SLOT',
+              fromSex: chosenSex,
+              toSex: altSex,
+              reason: 'fallback_would_worsen_parity',
+              penaltyOriginal: penaltyPrimary,
+              penaltyFallback: penaltyAlt
+            });
+            continue;
+          }
+        } else {
+          logParityDecision(cls, {
+            type: 'BLOCKED_SLOT',
+            fromSex: chosenSex,
+            toSex: altSex,
+            reason: primaryPoolSize === 0 ? 'pool_empty_both' : 'no_candidate_any_sex'
+          });
+          continue;
+        }
+      }
+
+      const poolToUse = chosenSex === 'F' ? poolF : poolM;
+      const rowIndex = poolToUse.splice(selection.poolIndex, 1)[0];
+      data[rowIndex][idxAssigned] = cls.name;
+
+      if (chosenSex === 'F') {
+        cls.pendingF++;
+        placedF++;
+      } else {
+        cls.pendingM++;
+        placedM++;
+      }
+
+      cls.slotsLeft--;
+      lastSexUsed = chosenSex;
+      progress = true;
+
+      const eleveRow = data[rowIndex];
+      const eleveId = idxId >= 0 ? eleveRow[idxId] : '';
+
+      logParityDecision(cls, {
+        type: 'PLACE',
+        sex: chosenSex,
+        eleveId: eleveId || '',
+        reason: fallbackUsed ? 'fallback_parity_choice' : 'primary_parity_choice'
+      });
+    }
   }
 
-  // Écrire dans _BASEOPTI
+  classes.forEach(function(cls) {
+    const finalF = cls.currentF + cls.pendingF;
+    const finalM = cls.currentM + cls.pendingM;
+    if (cls.slotsLeft > 0) {
+      logLine('WARN', '  ⚠️ ' + cls.name + ' : ' + cls.slotsLeft + ' sièges non pourvus');
+    }
+    logLine('INFO', '  ✅ ' + cls.name + ' finalisé (' + finalF + 'F/' + finalM + 'M)');
+  });
+
   baseSheet.getRange(1, 1, data.length, headers.length).setValues(data);
   SpreadsheetApp.flush();
 
-  // Sync vers colonnes legacy pour compatibilité audit
   syncClassAssignedToLegacy_('P3');
 
   // ⚡ OPTIMISATION QUOTA : Ne pas copier vers CACHE en Phase 3 (économiser les appels API)
   // La copie se fera en Phase 4 finale
   // copyBaseoptiToCache_V3(ctx);
 
-  // ✅ CALCUL MOBILITÉ : Recalculer après Phase 3 (effectifs complets)
   if (typeof computeMobilityFlags_ === 'function') {
     computeMobilityFlags_(ctx);
   } else {
     logLine('WARN', '⚠️ computeMobilityFlags_ non disponible (vérifier que Mobility_System.gs est chargé)');
   }
 
-  // Vérifier élèves non placés
   let remaining = 0;
   for (let i = 1; i < data.length; i++) {
     if (!String(data[i][idxAssigned] || '').trim()) {
@@ -839,6 +1050,43 @@ function Phase3I_completeAndParity_BASEOPTI_V3(ctx) {
 
   return { ok: true };
 }
+
+function logParityDecision(cls, details) {
+  try {
+    function formatPenalty(value) {
+      if (value === undefined || value === null) return '';
+      if (value === Infinity) return '∞';
+      if (value === -Infinity) return '-∞';
+      return value;
+    }
+
+    const row = [
+      new Date(),
+      'PHASE3_PARITY',
+      cls && cls.name ? cls.name : (cls && cls.id ? cls.id : ''),
+      details.type || '',
+      details.sex || '',
+      details.fromSex || '',
+      details.toSex || '',
+      details.reason || '',
+      formatPenalty(details.penaltyOriginal),
+      formatPenalty(details.penaltyFallback),
+      details.eleveId || ''
+    ];
+
+    if (typeof appendLogRow === 'function') {
+      appendLogRow(row);
+    } else if (typeof logLine === 'function') {
+      logLine('INFO', '📓 P3[' + row[2] + '] ' + JSON.stringify(details));
+    }
+  } catch (err) {
+    if (typeof logLine === 'function') {
+      logLine('WARN', '⚠️ Erreur logParityDecision : ' + err);
+    }
+  }
+}
+
+
 
 // ===================================================================
 // PHASE 4 V3 - SWAPS BASÉS SUR L'HARMONIE ET LA PARITÉ
@@ -1054,6 +1302,8 @@ function calculateCompositeSwapScore_V3(data, headers, byClass, targetDistributi
 function findBestSwap_V3(data, headers, byClass, targetDistribution, weights, ctx) {
   const idxMobilite = headers.indexOf('MOBILITE');
   const idxFixe = headers.indexOf('FIXE');
+  const idxAssigned = headers.indexOf('_CLASS_ASSIGNED');
+  const idxSexe = headers.indexOf('SEXE');
 
   let bestSwap = null;
   let bestScoreGain = 0.001; // Seuil minimum
@@ -1089,6 +1339,7 @@ function findBestSwap_V3(data, headers, byClass, targetDistribution, weights, ct
 
   return bestSwap;
 }
+
 
 // ===================================================================
 // SYNC LEGACY COLUMNS FOR AUDIT COMPATIBILITY
@@ -1452,8 +1703,10 @@ function generateOptimizationAudit_V3(ctx, data, headers, byClass, distributions
   logLine('INFO', '  Parité F/M : moyenne=' + report.quality.parity.avg + '% F, écart-type=' + report.quality.parity.ecartType);
 
   // Métriques d'optimisation
-  logLine('INFO', '  Variance scores : initiale=' + metrics.initialVariance.toFixed(2) + ', finale=' + metrics.finalVariance.toFixed(2));
-  logLine('INFO', '  Amélioration : ' + metrics.totalImprovement.toFixed(2) + ' (' + (metrics.totalImprovement / metrics.initialVariance * 100).toFixed(1) + '%)');
+  logLine('INFO', '  Harmonie académique pondérée : initiale=' + metrics.initialAcademic.toFixed(2) + ', finale=' + metrics.finalAcademic.toFixed(2) + ' (Δ=' + metrics.academicImprovement.toFixed(2) + ')');
+  logLine('INFO', '  Parité totale |F-M| : initiale=' + metrics.initialParity.toFixed(2) + ', finale=' + metrics.finalParity.toFixed(2) + ' (Δ=' + metrics.parityImprovement.toFixed(2) + ')');
+  logLine('INFO', '  Score composite : initial=' + metrics.initialComposite.toFixed(2) + ', final=' + metrics.finalComposite.toFixed(2) + ' (Δ=' + metrics.compositeImprovement.toFixed(2) + ')');
+  logLine('INFO', '  Harmonisation détaillée : COM=' + metrics.distributionImprovements.COM.toFixed(2) + ', TRA=' + metrics.distributionImprovements.TRA.toFixed(2) + ', PART=' + metrics.distributionImprovements.PART.toFixed(2) + ', ABS=' + metrics.distributionImprovements.ABS.toFixed(2));
   logLine('INFO', '  Swaps appliqués : ' + metrics.swapsApplied);
 
   // ========== 5. SYNTHÈSE ==========
@@ -1465,7 +1718,10 @@ function generateOptimizationAudit_V3(ctx, data, headers, byClass, distributions
   logLine('INFO', '  Parité globale : ' + report.global.parityRatio + '% F');
   logLine('INFO', '  Groupes ASSO : ' + assoKeys.length);
   logLine('INFO', '  Codes DISSO : ' + dissoKeys.length);
-  logLine('INFO', '  Amélioration variance : ' + (metrics.totalImprovement / metrics.initialVariance * 100).toFixed(1) + '%');
+  const improvementRatio = metrics.initialComposite !== 0
+    ? (metrics.compositeImprovement / metrics.initialComposite * 100).toFixed(1)
+    : 'N/A';
+  logLine('INFO', '  Amélioration composite : ' + improvementRatio + '%');
 
   logLine('INFO', '');
   logLine('INFO', '═══════════════════════════════════════════════════════');
