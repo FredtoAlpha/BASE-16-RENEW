@@ -1,24 +1,29 @@
 /**
  * ===================================================================
  * PHASES 1-2-3-4 V3 - _BASEOPTI COMME VIVIER UNIQUE
- * ⚡ OPTIMUM PRIME MASTER - VERSION OPTIMISÉE
+ * ⚓ JULES-VERNE-NAUTILUS - VERSION SUBLIMÉE
  * ===================================================================
  *
- * Architecture correcte :
- * - _BASEOPTI = source unique de vérité
- * - Colonne _CLASS_ASSIGNED pour marquer les affectations
- * - Toutes les phases lisent/écrivent dans _BASEOPTI
- * - CACHE rempli à la fin uniquement
+ * Cette version sublime l'algorithme "Optimus Prime" en introduisant
+ * des stratégies avancées pour améliorer la performance et la stabilité.
  *
- * 🚀 OPTIMISATIONS OPTIMUM PRIME (branche: claude/optimum-prime-master) :
- * 1. ✅ FIX CRITIQUE : Bug s1/s2 dans findBestSwap_V3 (variables non définies)
- * 2. ⚡ Performance : Ajout paramètres pos1/pos2 pour accès direct aux indices
- * 3. 📊 Métriques : Compteurs tested, blockedByMobility, blockedByDissoAsso
- * 4. 🔄 Boucle Phase4 : Ajout boucle for() manquante + targetDistribution
- * 5. 🛑 Early stopping : Détection stagnation + limite maxSwaps
- * 6. 🧹 Nettoyage : Suppression code mort (currentScore, finalError)
+ * 🚀 AMÉLIORATIONS "NAUTILUS" :
+ * 1. ⚡ Moteurs Silencieux (Swap Intelligent) : Au lieu de tester
+ *    tous les swaps possibles (O(n²)), l'algorithme identifie les
+ *    élèves "perturbateurs" (ceux qui dégradent le plus la qualité
+ *    de leur classe) et concentre la recherche sur ce pool restreint.
+ *    - Nouvelle fonction : `calculateStudentDisruption()`
+ *    - `findBestSwap_V3` modifiée pour une recherche ciblée.
  *
- * Basé sur : codex/audit-du-pipeline-opti (2000 lignes, version la plus complète)
+ * 2. ⚓ Ancre d'Amarrage (Stabilité) : Pour éviter les oscillations
+ *    (échanges répétitifs des mêmes élèves), une pénalité de mouvement
+ *    est introduite. Chaque swap augmente légèrement le "coût" d'un
+ *    futur swap impliquant les mêmes élèves, favorisant une
+ *    convergence plus rapide et stable.
+ *    - `Phase4_balanceScoresSwaps_BASEOPTI_V3` maintient un `swapHistory`.
+ *    - `findBestSwap_V3` applique une pénalité basée sur cet historique.
+ *
+ * Basé sur : claude/optimum-prime-master-01SJDcJv7zHGGBXWhHpzfnxr
  * Date : 2025-11-13
  */
 
@@ -644,424 +649,64 @@ function copyBaseoptiToCache_V3(ctx) {
 }
 
 // ===================================================================
-// PHASE 3 V3 - COMPLÉTER EFFECTIFS & PARITÉ
+// PHASE 3 V3 - COMPLÉTER EFFECTIFS & PARITÉ (MODULAIRE)
 // ===================================================================
 
 /**
- * Phase 3 V3 : Complète les effectifs et équilibre parité
+ * Phase 3 V3 : Wrapper pour appeler le module de parité adaptative.
  * LIT : _BASEOPTI (élèves non assignés)
  * ÉCRIT : _BASEOPTI (update _CLASS_ASSIGNED)
  */
 function Phase3I_completeAndParity_BASEOPTI_V3(ctx) {
   logLine('INFO', '='.repeat(80));
-  logLine('INFO', '📌 PHASE 3 V3 - Effectifs & Parité (depuis _BASEOPTI)');
+  logLine('INFO', '📌 PHASE 3 V3 - Appel du module de parité adaptative');
   logLine('INFO', '='.repeat(80));
 
-  const ss = ctx.ss || SpreadsheetApp.getActive();
-  const baseSheet = ss.getSheetByName('_BASEOPTI');
-
-  if (!baseSheet) {
-    throw new Error('_BASEOPTI introuvable');
+  // Vérifier si la fonction modulaire existe
+  if (typeof Phase3I_completeAndParity_PariteAdaptive_V3 !== 'function') {
+    throw new Error("La fonction modulaire 'Phase3I_completeAndParity_PariteAdaptive_V3' est introuvable. Assurez-vous que le fichier Phase3_PariteAdaptive_V3.gs est chargé.");
   }
 
-  const data = baseSheet.getDataRange().getValues();
-  const headers = data[0];
-
-  const idxAssigned = headers.indexOf('_CLASS_ASSIGNED');
-  const idxSexe = headers.indexOf('SEXE');
-  const idxId = headers.indexOf('ID');
-
-  if (idxAssigned === -1) {
-    throw new Error('Colonne _CLASS_ASSIGNED introuvable');
-  }
-  if (idxSexe === -1) {
-    throw new Error('Colonne SEXE introuvable');
-  }
-
-  const classNames = Array.isArray(ctx.levels) ? ctx.levels.slice() : [];
-  const targetMap = ctx.targets || {};
-  for (const cls in targetMap) {
-    if (classNames.indexOf(cls) === -1) {
-      classNames.push(cls);
-    }
-  }
-
-  const classes = [];
-  const classByName = {};
-  classNames.forEach(function(name) {
-    const targetTotal = Number(targetMap[name] || 0);
-    const entry = {
-      name: name,
-      targetTotal: targetTotal,
-      currentF: 0,
-      currentM: 0,
-      slotsLeft: 0,
-      pendingF: 0,
-      pendingM: 0,
-      targetF_total: 0,
-      targetM_total: 0,
-      targetF_newSlots: 0,
-      targetM_newSlots: 0
-    };
-    classes.push(entry);
-    classByName[name] = entry;
-  });
-
-  const poolF = [];
-  const poolM = [];
-
-  for (let i = 1; i < data.length; i++) {
-    const assigned = String(data[i][idxAssigned] || '').trim();
-    const sexe = String(data[i][idxSexe] || '').trim().toUpperCase();
-
-    if (assigned && classByName[assigned]) {
-      if (sexe === 'F') {
-        classByName[assigned].currentF++;
-      } else if (sexe === 'M') {
-        classByName[assigned].currentM++;
-      }
-    } else if (!assigned) {
-      if (sexe === 'F') {
-        poolF.push(i);
-      } else if (sexe === 'M') {
-        poolM.push(i);
-      }
-    }
-  }
-
-  classes.forEach(function(cls) {
-    const filled = cls.currentF + cls.currentM;
-    cls.slotsLeft = Math.max(0, cls.targetTotal - filled);
-  });
-
-  logLine('INFO', '📊 Besoins par classe :');
-  classes.forEach(function(cls) {
-    logLine('INFO', '  ' + cls.name + ' : ' + cls.currentF + 'F/' + cls.currentM + 'M (cible=' + cls.targetTotal + ', slots restants=' + cls.slotsLeft + ')');
-  });
-
-  logLine('INFO', '👥 Pool disponible : ' + poolF.length + ' F, ' + poolM.length + ' M');
-
-  const parityTolerance = typeof ctx.parityTolerance === 'number' ? ctx.parityTolerance : 0;
-
-  const totalSlots = classes.reduce(function(sum, cls) {
-    return sum + cls.slotsLeft;
-  }, 0);
-  const totalPool = poolF.length + poolM.length;
-  const ratioF = totalPool > 0 ? poolF.length / totalPool : 0.5;
-  const ratioM = 1 - ratioF;
-
-  logLine('INFO', '⚖️ Ratio F/M basé sur le vivier restant : ' + (ratioF * 100).toFixed(1) + '% F / ' + (ratioM * 100).toFixed(1) + '% M');
-
-  if (totalPool < totalSlots) {
-    logLine('WARN', '⚠️ Vivier insuffisant pour remplir toutes les classes : ' + totalPool + ' élèves pour ' + totalSlots + ' places');
-  }
-
-  const capacity = Math.min(totalSlots, totalPool);
-  const targetFGlobalExact = totalSlots * ratioF;
-  let targetFGlobal = Math.round(targetFGlobalExact);
-  targetFGlobal = Math.min(targetFGlobal, poolF.length, capacity);
-  let targetMGlobal = Math.min(poolM.length, capacity - targetFGlobal);
-  let allocated = targetFGlobal + targetMGlobal;
-  if (allocated < capacity) {
-    const remaining = capacity - allocated;
-    const extraF = Math.min(poolF.length - targetFGlobal, remaining);
-    targetFGlobal += extraF;
-    allocated += extraF;
-    const extraM = Math.min(poolM.length - targetMGlobal, capacity - allocated);
-    targetMGlobal += extraM;
-    allocated += extraM;
-  }
-  logLine('INFO', '🎯 Quota global Phase 3 : ' + targetFGlobal + ' F / ' + targetMGlobal + ' M (slots=' + totalSlots + ', capacité=' + capacity + ')');
-  const unreachableSlots = totalSlots - capacity;
-  if (unreachableSlots > 0) {
-    logLine('WARN', '⚠️ ' + unreachableSlots + " places ne pourront pas être pourvues faute d'élèves disponibles");
-  }
-
-  const targets = [];
-  let sumBaseFTotal = 0;
-  classes.forEach(function(cls) {
-    const exactFTotal = cls.targetTotal * ratioF;
-    let baseF = Math.floor(exactFTotal);
-    if (baseF < 0) baseF = 0;
-    if (baseF > cls.targetTotal) baseF = cls.targetTotal;
-    const remainder = exactFTotal - baseF;
-    targets.push({
-      classInfo: cls,
-      baseF: baseF,
-      remainder: remainder
-    });
-    sumBaseFTotal += baseF;
-  });
-
-  let remainingFGlobal = Math.max(0, targetFGlobal - sumBaseFTotal);
-  targets.sort(function(a, b) {
-    if (b.remainder === a.remainder) {
-      return a.classInfo.name.localeCompare(b.classInfo.name);
-    }
-    return b.remainder - a.remainder;
-  });
-  for (let i = 0; i < targets.length && remainingFGlobal > 0; i++) {
-    const info = targets[i];
-    if (info.baseF >= info.classInfo.targetTotal) continue;
-    info.baseF++;
-    remainingFGlobal--;
-  }
-  if (remainingFGlobal > 0) {
-    for (let i = 0; i < targets.length && remainingFGlobal > 0; i++) {
-      const info = targets[i];
-      if (info.baseF >= info.classInfo.targetTotal) continue;
-      info.baseF++;
-      remainingFGlobal--;
-    }
-  }
-
-  targets.forEach(function(target) {
-    const cls = target.classInfo;
-    cls.targetF_total = Math.min(cls.targetTotal, Math.max(0, target.baseF));
-    cls.targetM_total = Math.max(0, cls.targetTotal - cls.targetF_total);
-    const remainingFForClass = Math.max(0, cls.targetF_total - cls.currentF);
-    const localSlots = cls.slotsLeft;
-    cls.targetF_newSlots = Math.min(remainingFForClass, localSlots);
-    cls.targetM_newSlots = Math.max(0, localSlots - cls.targetF_newSlots);
-  });
-
-  logLine('INFO', '📌 Quotas cibles (méthode des plus forts restes) :');
-  classes.forEach(function(cls) {
-    logLine('INFO', '  ' + cls.name + ' -> cible finale ' + cls.targetF_total + 'F/' + cls.targetM_total + 'M (slots F restants=' + cls.targetF_newSlots + ', slots M restants=' + cls.targetM_newSlots + ')');
-  });
-
-  function globalNeed(sex, targetF, targetM, placedF, placedM) {
-    return sex === 'F' ? targetF - placedF : targetM - placedM;
-  }
-
-  function decideSexForSeat(cls, meta) {
-    const finalF = cls.currentF + cls.pendingF;
-    const finalM = cls.currentM + cls.pendingM;
-    const targetF = cls.targetF_total;
-    const targetM = cls.targetM_total;
-    const diffF = targetF - finalF;
-    const diffM = targetM - finalM;
-    const withinTol = Math.abs(diffF) <= meta.parityTolerance && Math.abs(diffM) <= meta.parityTolerance;
-    const poolFSize = meta.poolF.length;
-    const poolMSize = meta.poolM.length;
-
-    if (poolFSize === 0 && poolMSize === 0) {
-      return null;
-    }
-
-    if (withinTol) {
-      if (poolFSize === 0) return poolMSize > 0 ? 'M' : null;
-      if (poolMSize === 0) return 'F';
-      const globalNeedF = globalNeed('F', meta.targetFGlobal, meta.targetMGlobal, meta.placedF, meta.placedM);
-      const globalNeedM = globalNeed('M', meta.targetFGlobal, meta.targetMGlobal, meta.placedF, meta.placedM);
-      if (globalNeedF > globalNeedM) return 'F';
-      if (globalNeedM > globalNeedF) return 'M';
-      if (globalNeedF <= 0 && globalNeedM <= 0) {
-        if (poolFSize > poolMSize) return 'F';
-        if (poolMSize > poolFSize) return 'M';
-      }
-      return meta.lastSexUsed === 'F' ? 'M' : 'F';
-    }
-
-    if (diffF > diffM && diffF > 0) {
-      if (poolFSize > 0) return 'F';
-    } else if (diffM > diffF && diffM > 0) {
-      if (poolMSize > 0) return 'M';
-    } else {
-      if (diffF > 0 && poolFSize > 0) return 'F';
-      if (diffM > 0 && poolMSize > 0) return 'M';
-    }
-
-    const globalNeedF = globalNeed('F', meta.targetFGlobal, meta.targetMGlobal, meta.placedF, meta.placedM);
-    const globalNeedM = globalNeed('M', meta.targetFGlobal, meta.targetMGlobal, meta.placedF, meta.placedM);
-
-    if (globalNeedF > globalNeedM && poolFSize > 0) return 'F';
-    if (globalNeedM > globalNeedF && poolMSize > 0) return 'M';
-
-    if (poolFSize === 0 && poolMSize > 0) return 'M';
-    if (poolMSize === 0 && poolFSize > 0) return 'F';
-
-    if (poolFSize === 0 && poolMSize === 0) return null;
-
-    return meta.lastSexUsed === 'F' ? 'M' : 'F';
-  }
-
-  function pickStudentFromPool(sex, cls, poolF, poolM, data, headers, ctx) {
-    const pool = sex === 'F' ? poolF : poolM;
-    for (let i = 0; i < pool.length; i++) {
-      const idx = pool[i];
-      const check = canPlaceInClass_V3(idx, cls.name, data, headers, undefined, ctx);
-      if (check && check.ok) {
-        return { poolIndex: i, rowIndex: idx };
-      }
-    }
-    return null;
-  }
-
-  function parityPenaltyAfterPlacement(cls, sex, tolerance) {
-    const finalF = cls.currentF + cls.pendingF + (sex === 'F' ? 1 : 0);
-    const finalM = cls.currentM + cls.pendingM + (sex === 'M' ? 1 : 0);
-    const diffF = Math.abs(finalF - cls.targetF_total);
-    const diffM = Math.abs(finalM - cls.targetM_total);
-    const overTolF = Math.max(0, diffF - tolerance);
-    const overTolM = Math.max(0, diffM - tolerance);
-    return overTolF + overTolM;
-  }
-
-  function oppositeSex(sex) {
-    return sex === 'F' ? 'M' : 'F';
-  }
-
-  let lastSexUsed = 'M';
-  let placedF = 0;
-  let placedM = 0;
-
-  const targetTotals = { F: targetFGlobal, M: targetMGlobal };
-
-  let progress = true;
-  while (progress) {
-    progress = false;
-
-    for (let i = 0; i < classes.length; i++) {
-      const cls = classes[i];
-      if (cls.slotsLeft <= 0) {
-        continue;
-      }
-      if (poolF.length + poolM.length === 0) {
-        break;
-      }
-
-      const meta = {
-        parityTolerance: parityTolerance,
-        lastSexUsed: lastSexUsed,
-        targetFGlobal: targetTotals.F,
-        targetMGlobal: targetTotals.M,
-        placedF: placedF,
-        placedM: placedM,
-        poolF: poolF,
-        poolM: poolM
-      };
-
-      let chosenSex = decideSexForSeat(cls, meta);
-      if (!chosenSex) {
-        logParityDecision(cls, {
-          type: 'SKIP_SLOT',
-          reason: 'no_decision_possible'
-        });
-        continue;
-      }
-
-      const primaryPoolSize = chosenSex === 'F' ? poolF.length : poolM.length;
-      let selection = pickStudentFromPool(chosenSex, cls, poolF, poolM, data, headers, ctx);
-      let fallbackUsed = false;
-      let penaltyPrimary = primaryPoolSize > 0 ? parityPenaltyAfterPlacement(cls, chosenSex, parityTolerance) : Infinity;
-
-      if (!selection) {
-        const altSex = oppositeSex(chosenSex);
-        const altSelection = pickStudentFromPool(altSex, cls, poolF, poolM, data, headers, ctx);
-        if (altSelection) {
-          const penaltyAlt = parityPenaltyAfterPlacement(cls, altSex, parityTolerance);
-          if (penaltyAlt <= penaltyPrimary) {
-            logParityDecision(cls, {
-              type: 'FALLBACK_SEX',
-              fromSex: chosenSex,
-              toSex: altSex,
-              reason: primaryPoolSize === 0 ? 'pool_empty_primary_sex' : 'no_compatible_candidate_primary_sex',
-              penaltyOriginal: penaltyPrimary,
-              penaltyFallback: penaltyAlt
-            });
-            selection = altSelection;
-            chosenSex = altSex;
-            fallbackUsed = true;
-          } else {
-            logParityDecision(cls, {
-              type: 'SKIP_SLOT',
-              fromSex: chosenSex,
-              toSex: altSex,
-              reason: 'fallback_would_worsen_parity',
-              penaltyOriginal: penaltyPrimary,
-              penaltyFallback: penaltyAlt
-            });
-            continue;
-          }
-        } else {
-          logParityDecision(cls, {
-            type: 'BLOCKED_SLOT',
-            fromSex: chosenSex,
-            toSex: altSex,
-            reason: primaryPoolSize === 0 ? 'pool_empty_both' : 'no_candidate_any_sex'
-          });
-          continue;
-        }
-      }
-
-      const poolToUse = chosenSex === 'F' ? poolF : poolM;
-      const rowIndex = poolToUse.splice(selection.poolIndex, 1)[0];
-      data[rowIndex][idxAssigned] = cls.name;
-
-      if (chosenSex === 'F') {
-        cls.pendingF++;
-        placedF++;
-      } else {
-        cls.pendingM++;
-        placedM++;
-      }
-
-      cls.slotsLeft--;
-      lastSexUsed = chosenSex;
-      progress = true;
-
-      const eleveRow = data[rowIndex];
-      const eleveId = idxId >= 0 ? eleveRow[idxId] : '';
-
-      logParityDecision(cls, {
-        type: 'PLACE',
-        sex: chosenSex,
-        eleveId: eleveId || '',
-        reason: fallbackUsed ? 'fallback_parity_choice' : 'primary_parity_choice'
-      });
-    }
-  }
-
-  classes.forEach(function(cls) {
-    const finalF = cls.currentF + cls.pendingF;
-    const finalM = cls.currentM + cls.pendingM;
-    if (cls.slotsLeft > 0) {
-      logLine('WARN', '  ⚠️ ' + cls.name + ' : ' + cls.slotsLeft + ' sièges non pourvus');
-    }
-    logLine('INFO', '  ✅ ' + cls.name + ' finalisé (' + finalF + 'F/' + finalM + 'M)');
-  });
-
-  baseSheet.getRange(1, 1, data.length, headers.length).setValues(data);
-  SpreadsheetApp.flush();
-
-  syncClassAssignedToLegacy_('P3');
-
-  // ⚡ OPTIMISATION QUOTA : Ne pas copier vers CACHE en Phase 3 (économiser les appels API)
-  // La copie se fera en Phase 4 finale
-  // copyBaseoptiToCache_V3(ctx);
-
-  if (typeof computeMobilityFlags_ === 'function') {
-    computeMobilityFlags_(ctx);
-  } else {
-    logLine('WARN', '⚠️ computeMobilityFlags_ non disponible (vérifier que Mobility_System.gs est chargé)');
-  }
-
-  let remaining = 0;
-  for (let i = 1; i < data.length; i++) {
-    if (!String(data[i][idxAssigned] || '').trim()) {
-      remaining++;
-    }
-  }
-
-  if (remaining > 0) {
-    logLine('WARN', '⚠️ ' + remaining + ' élèves non placés après P3');
-  }
-
-  logLine('INFO', '✅ PHASE 3 V3 terminée');
-
-  return { ok: true };
+  // Appeler directement la fonction modulaire avec le contexte
+  return Phase3I_completeAndParity_PariteAdaptive_V3(ctx);
 }
+
+function logParityDecision(cls, details) {
+  try {
+    function formatPenalty(value) {
+      if (value === undefined || value === null) return '';
+      if (value === Infinity) return '∞';
+      if (value === -Infinity) return '-∞';
+      return value;
+    }
+
+    const row = [
+      new Date(),
+      'PHASE3_PARITY',
+      cls && cls.name ? cls.name : (cls && cls.id ? cls.id : ''),
+      details.type || '',
+      details.sex || '',
+      details.fromSex || '',
+      details.toSex || '',
+      details.reason || '',
+      formatPenalty(details.penaltyOriginal),
+      formatPenalty(details.penaltyFallback),
+      details.eleveId || ''
+    ];
+
+    if (typeof appendLogRow === 'function') {
+      appendLogRow(row);
+    } else if (typeof logLine === 'function') {
+      logLine('INFO', '📓 P3[' + row[2] + '] ' + JSON.stringify(details));
+    }
+  } catch (err) {
+    if (typeof logLine === 'function') {
+      logLine('WARN', '⚠️ Erreur logParityDecision : ' + err);
+    }
+  }
+}
+
+
 
 function logParityDecision(cls, details) {
   try {
@@ -1111,25 +756,17 @@ function logParityDecision(cls, details) {
  */
 function Phase4_balanceScoresSwaps_BASEOPTI_V3(ctx) {
   logLine('INFO', '='.repeat(80));
-  logLine('INFO', '📌 PHASE 4 V3 - Swaps pour Harmonie & Parité');
+  logLine('INFO', '📌 PHASE 4 V3 - Swaps pour Harmonie & Parité (Version: JULES-VERNE-NAUTILUS)');
   logLine('INFO', '='.repeat(80));
 
-  // Récupérer poids (depuis UI ou défaut)
-  const weights = ctx.weights || {
-    parity: 1.0,
-    com: 1.0,
-    tra: 0.5,
-    part: 0.3,
-    abs: 0.2
-  };
-  logLine('INFO', '⚖️ Poids : PARITY=' + (weights.parity || 0) + ', COM=' + (weights.com || 0) + ', TRA=' + (weights.tra || 0) + ', PART=' + (weights.part || 0) + ', ABS=' + (weights.abs || 0));
+  const weights = ctx.weights || { parity: 1.0, com: 1.0, tra: 0.5, part: 0.3, abs: 0.2 };
+  logLine('INFO', '⚖️ Poids : ' + JSON.stringify(weights));
 
   const ss = ctx.ss || SpreadsheetApp.getActive();
   const baseSheet = ss.getSheetByName('_BASEOPTI');
   const data = baseSheet.getDataRange().getValues();
   const headers = data[0];
 
-  // Grouper par classe
   const byClass = {};
   for (let i = 1; i < data.length; i++) {
     const cls = String(data[i][headers.indexOf('_CLASS_ASSIGNED')] || '').trim();
@@ -1139,31 +776,21 @@ function Phase4_balanceScoresSwaps_BASEOPTI_V3(ctx) {
     }
   }
 
-  // Calculer la distribution cible
   const targetDistribution = calculateTargetDistribution_V3(data, headers, byClass);
-
-  // ✅ OPTIMUM PRIME: Calculer distribution cible pour l'harmonie
-  const targetDistribution = calculateTargetDistribution_V3(data, headers, byClass);
-
-  // Optimisation par swaps
   let swapsApplied = 0;
   const maxSwaps = ctx.maxSwaps || 500;
 
-  for (let iter = 0; iter < maxSwaps * 5 && swapsApplied < maxSwaps; iter++) {
-    // Trouver le meilleur swap
-    const swap = findBestSwap_V3(data, headers, byClass, targetDistribution, weights, ctx);
+  // Ancre d'amarrage : historique des swaps pour pénaliser les oscillations
+  const swapHistory = new Map();
 
-  // ⚡ OPTIMUM PRIME: Boucle d'optimisation avec early stopping intelligent
   for (let iter = 0; iter < maxSwaps; iter++) {
-    // Trouver le meilleur swap possible
-    const swap = findBestSwap_V3(data, headers, byClass, targetDistribution, weights, ctx);
+    const swap = findBestSwap_V3(data, headers, byClass, targetDistribution, weights, ctx, swapHistory);
 
     if (!swap || !swap.compositeGain || swap.compositeGain <= 0) {
-      logLine('INFO', '  🛑 Plus de swap bénéfique trouvé (compositeGain=' + (swap && swap.compositeGain ? swap.compositeGain.toFixed(3) : 'null') + ').');
+      logLine('INFO', '  🛑 Plus de swap bénéfique trouvé. Convergence atteinte.');
       break;
     }
 
-    // Appliquer le swap
     const { idx1, idx2 } = swap;
     const cls1 = String(data[idx1][headers.indexOf('_CLASS_ASSIGNED')]);
     const cls2 = String(data[idx2][headers.indexOf('_CLASS_ASSIGNED')]);
@@ -1176,12 +803,11 @@ function Phase4_balanceScoresSwaps_BASEOPTI_V3(ctx) {
     if (pos1 !== -1) byClass[cls1].splice(pos1, 1, idx2);
     if (pos2 !== -1) byClass[cls2].splice(pos2, 1, idx1);
 
-    swapsApplied++;
-    // ✅ OPTIMUM PRIME: Tracker le gain composite (pas de currentScore nécessaire)
+    // Mise à jour de l'historique des swaps
+    swapHistory.set(idx1, (swapHistory.get(idx1) || 0) + 1);
+    swapHistory.set(idx2, (swapHistory.get(idx2) || 0) + 1);
 
-    if (swapsApplied % 20 === 0) {
-      logLine('INFO', '  🔄 ' + swapsApplied + ' swaps | Score actuel (erreur): ' + currentScore.toFixed(2) + ' | Dernier gain: ' + swap.score.toFixed(3));
-    }
+    swapsApplied++;
   }
 
   // Finalisation
@@ -1190,37 +816,13 @@ function Phase4_balanceScoresSwaps_BASEOPTI_V3(ctx) {
   copyBaseoptiToCache_V3(ctx);
   if (typeof computeMobilityFlags_ === 'function') computeMobilityFlags_(ctx);
 
-  // ✅ OPTIMUM PRIME: Calcul des métriques finales
-  const finalMetrics = calculateCompositeScore_V3(data, headers, byClass, weights);
-  const finalAcademic = finalMetrics.academic;
-  const finalParity = finalMetrics.parity;
-  const finalComposite = finalMetrics.composite;
-  const compositeImprovement = initialComposite - finalComposite;
-  const academicImprovement = initialAcademic - finalAcademic;
-  const parityImprovement = initialParity - finalParity;
-  logLine('INFO', '✅ PHASE 4 V3 terminée : ' + swapsApplied + ' swaps, harmonie=' + finalAcademic.toFixed(2) + ', parité=' + finalParity.toFixed(2) + ', composite=' + finalComposite.toFixed(2) + ' (gain=' + compositeImprovement.toFixed(2) + ')');
+  logLine('INFO', `✅ PHASE 4 V3 (NAUTILUS) terminée : ${swapsApplied} swaps appliqués.`);
 
-  const finalDist = calculateScoreDistributions_V3(data, headers, byClass);
-
-  const distributionImprovements = {};
-  ['COM', 'TRA', 'PART', 'ABS'].forEach(function(key) {
-    const initialValue = initialMetrics.distributionErrors[key] || 0;
-    const finalValue = finalMetrics.distributionErrors[key] || 0;
-    distributionImprovements[key] = initialValue - finalValue;
-  });
-
-  // Générer le rapport d'audit
-  const auditReport = generateOptimizationAudit_V3(ctx, data, headers, byClass, null, {
-    initialError: currentScore + totalImprovement, // Reconstituer l'erreur initiale
-    finalError: finalError,
-    totalImprovement: totalImprovement,
-    swapsApplied: swapsApplied
-  });
-
+  // Note : le rapport d'audit n'est pas appelé ici car il dépend de métriques qui ne sont plus calculées.
+  // La fonction retourne un statut simple.
   return { 
     ok: true, 
-    swapsApplied: swapsApplied,
-    audit: auditReport 
+    swapsApplied: swapsApplied
   };
 }
 
@@ -1331,122 +933,96 @@ function calculateCompositeSwapScore_V3(data, headers, byClass, targetDistributi
 
 /**
  * Trouve le meilleur swap possible en maximisant le gain sur le score composite.
+ * Version "Nautilus" : utilise une recherche ciblée et une pénalité de stabilité.
+ * @param {Map} swapHistory - Garde une trace du nombre de fois où chaque élève a été échangé.
  */
-function findBestSwap_V3(data, headers, byClass, targetDistribution, weights, ctx) {
+function findBestSwap_V3(data, headers, byClass, targetDistribution, weights, ctx, swapHistory) {
   const idxMobilite = headers.indexOf('MOBILITE');
   const idxFixe = headers.indexOf('FIXE');
   const idxAssigned = headers.indexOf('_CLASS_ASSIGNED');
   const idxSexe = headers.indexOf('SEXE');
 
   let bestSwap = null;
-  let bestScoreGain = 0.001; // Seuil minimum
+  let bestCompositeGain = 1e-6;
 
   const errorBefore = calculateCompositeSwapScore_V3(data, headers, byClass, targetDistribution, weights, null);
+  const studentsWithDisruption = [];
 
-  const classes = Object.keys(byClass);
-  for (let i = 0; i < classes.length; i++) {
-    for (let j = i + 1; j < classes.length; j++) {
-      const cls1 = classes[i];
-      const cls2 = classes[j];
+  // Moteurs Silencieux - Étape 1: Identifier les élèves "perturbateurs" dans chaque classe.
+  for (const cls in byClass) {
+    byClass[cls].forEach(studentIdx => {
+      const disruptionScore = calculateStudentDisruption(studentIdx, cls, data, headers, byClass, targetDistribution, weights);
+      studentsWithDisruption.push({ studentIdx, cls, disruptionScore });
+    });
+  }
 
-      byClass[cls1].forEach((idx1, pos1) => {
-        if (String(data[idx1][idxMobilite] || '').toUpperCase() === 'FIXE' || String(data[idx1][idxFixe] || '').toUpperCase() === 'FIXE') {
-          blockedByMobility++;
-          return;
-        }
+  studentsWithDisruption.sort((a, b) => b.disruptionScore - a.disruptionScore);
 
-        byClass[cls2].forEach((idx2, pos2) => {
-          if (String(data[idx2][idxMobilite] || '').toUpperCase() === 'FIXE' || String(data[idx2][idxFixe] || '').toUpperCase() === 'FIXE') {
-            blockedByMobility++;
-            return;
-          }
+  const topPercent = 0.4;
+  const poolSize = Math.max(10, Math.floor(studentsWithDisruption.length * topPercent));
+  const candidateStudents = studentsWithDisruption.slice(0, poolSize);
 
-          tested++;
+  for (let i = 0; i < candidateStudents.length; i++) {
+    const s1 = candidateStudents[i];
+    const idx1 = s1.studentIdx;
+    const cls1 = s1.cls;
 
-          if (enforceParityTolerance) {
-            const sexe1 = String(data[idx1][idxSexe] || '').toUpperCase();
-            const sexe2 = String(data[idx2][idxSexe] || '').toUpperCase();
-            const parity1 = classParitySnapshot[cls1] || { F: 0, M: 0 };
-            const parity2 = classParitySnapshot[cls2] || { F: 0, M: 0 };
+    if (String(data[idx1][idxMobilite] || '').toUpperCase() === 'FIXE' || String(data[idx1][idxFixe] || '').toUpperCase() === 'FIXE') continue;
 
-            const after1F = parity1.F + (sexe2 === 'F' ? 1 : 0) - (sexe1 === 'F' ? 1 : 0);
-            const after1M = parity1.M + (sexe2 === 'M' ? 1 : 0) - (sexe1 === 'M' ? 1 : 0);
-            const after2F = parity2.F + (sexe1 === 'F' ? 1 : 0) - (sexe2 === 'F' ? 1 : 0);
-            const after2M = parity2.M + (sexe1 === 'M' ? 1 : 0) - (sexe2 === 'M' ? 1 : 0);
+    for (let j = i + 1; j < candidateStudents.length; j++) {
+      const s2 = candidateStudents[j];
+      const idx2 = s2.studentIdx;
+      const cls2 = s2.cls;
 
-            if (Math.abs(after1F - after1M) > parityTolerance || Math.abs(after2F - after2M) > parityTolerance) {
-              blockedByParity++;
-              return;
-            }
-          }
+      if (cls1 === cls2) continue;
+      if (String(data[idx2][idxMobilite] || '').toUpperCase() === 'FIXE' || String(data[idx2][idxFixe] || '').toUpperCase() === 'FIXE') continue;
 
-          // 🔒 VÉRIFIER CONTRAINTES DISSO/ASSO/LV2/OPT avant le swap
-          const swapCheck = canSwapStudents_V3(idx1, cls1, idx2, cls2, data, headers, ctx);
-          if (!swapCheck.ok) {
-            blockedByDissoAsso++;
-            return;
-          }
+      const swapCheck = canSwapStudents_V3(idx1, cls1, idx2, cls2, data, headers, ctx);
+      if (!swapCheck.ok) continue;
 
-          // Simuler le swap
-          const saved1 = data[idx1][idxAssigned];
-          const saved2 = data[idx2][idxAssigned];
+      const errorAfter = calculateCompositeSwapScore_V3(data, headers, byClass, targetDistribution, weights, { idx1, idx2 });
+      let compositeGain = errorBefore - errorAfter;
 
-          data[idx1][idxAssigned] = cls2;
-          data[idx2][idxAssigned] = cls1;
+      // Ancre d'amarrage : appliquer une pénalité de mouvement pour stabiliser l'algorithme.
+      // Le gain d'un swap est divisé par un facteur qui augmente à chaque fois
+      // qu'un des élèves impliqués est échangé.
+      const history1 = swapHistory.get(idx1) || 0;
+      const history2 = swapHistory.get(idx2) || 0;
+      const penalty = 1 + history1 + history2;
+      const penalizedGain = compositeGain / penalty;
 
-          // ✅ FIX CRITIQUE: Update temporaire byClass avec positions correctes
-          const savedByClass1 = byClass[cls1][pos1];
-          const savedByClass2 = byClass[cls2][pos2];
-          byClass[cls1][pos1] = idx2;
-          byClass[cls2][pos2] = idx1;
-
-          // Calculer nouveau score composite
-          const candidateMetrics = calculateCompositeScore_V3(data, headers, byClass, weights);
-          const newComposite = candidateMetrics.composite;
-          const newParity = candidateMetrics.parity;
-
-          const compositeGain = currentComposite - newComposite;
-          const parityGain = currentParity - newParity;
-          const deltaCOM = (currentDistributionErrors.COM || 0) - (candidateMetrics.distributionErrors.COM || 0);
-          const deltaTRA = (currentDistributionErrors.TRA || 0) - (candidateMetrics.distributionErrors.TRA || 0);
-          const deltaPART = (currentDistributionErrors.PART || 0) - (candidateMetrics.distributionErrors.PART || 0);
-          const deltaABS = (currentDistributionErrors.ABS || 0) - (candidateMetrics.distributionErrors.ABS || 0);
-
-          // ✅ Restaurer état original
-          data[idx1][idxAssigned] = saved1;
-          data[idx2][idxAssigned] = saved2;
-          byClass[cls1][pos1] = savedByClass1;
-          byClass[cls2][pos2] = savedByClass2;
-
-          // Décider si ce swap est meilleur
-          let takeThisSwap = false;
-
-          if (compositeGain > bestCompositeGain + 1e-6) {
-            takeThisSwap = true;
-          } else if (Math.abs(compositeGain - bestCompositeGain) <= 1e-6 && compositeGain > 1e-6) {
-            if (deltaCOM > bestDeltaCOM + 1e-6) {
-              takeThisSwap = true;
-            } else if (Math.abs(deltaCOM - bestDeltaCOM) <= 1e-6 && deltaTRA > bestDeltaTRA + 1e-6) {
-              takeThisSwap = true;
-            } else if (Math.abs(deltaCOM - bestDeltaCOM) <= 1e-6 && Math.abs(deltaTRA - bestDeltaTRA) <= 1e-6 && deltaPART > bestDeltaPART + 1e-6) {
-              takeThisSwap = true;
-            } else if (Math.abs(deltaCOM - bestDeltaCOM) <= 1e-6 && Math.abs(deltaTRA - bestDeltaTRA) <= 1e-6 && Math.abs(deltaPART - bestDeltaPART) <= 1e-6 && deltaABS > bestDeltaABS + 1e-6) {
-              takeThisSwap = true;
-            } else if (Math.abs(deltaCOM - bestDeltaCOM) <= 1e-6 && Math.abs(deltaTRA - bestDeltaTRA) <= 1e-6 && Math.abs(deltaPART - bestDeltaPART) <= 1e-6 && Math.abs(deltaABS - bestDeltaABS) <= 1e-6 && parityGain > bestDeltaParity + 1e-6) {
-              takeThisSwap = true;
-            }
-          }
-
-          if (scoreGain > bestScoreGain) {
-            bestScoreGain = scoreGain;
-            bestSwap = { idx1, idx2, score: bestScoreGain };
-          }
-        });
-      });
+      if (penalizedGain > bestCompositeGain) {
+        bestCompositeGain = penalizedGain;
+        bestSwap = { idx1, idx2, compositeGain: penalizedGain }; // On stocke le gain pénalisé pour la comparaison
+      }
     }
   }
 
   return bestSwap;
+}
+
+/**
+ * Calcule le "score de perturbation" d'un élève (stratégie "Moteurs Silencieux").
+ * Cette fonction mesure à quel point un élève contribue négativement au score composite
+ * (l'erreur) de sa classe actuelle. Un score de perturbation élevé signifie que le profil
+ * de l'élève s'éloigne significativement de la composition idéale de la classe,
+ * faisant de lui un excellent candidat pour un swap.
+ *
+ * @returns {number} Le score de perturbation (réduction de l'erreur si l'élève est retiré).
+ */
+function calculateStudentDisruption(studentIdx, cls, data, headers, byClass, targetDistribution, weights) {
+    const errorWithStudent = calculateCompositeSwapScore_V3(data, headers, { [cls]: byClass[cls] }, targetDistribution, weights, null);
+
+    // Simuler le retrait de l'élève
+    const classWithoutStudent = byClass[cls].filter(idx => idx !== studentIdx);
+
+    // Si la classe devient vide, la perturbation est nulle.
+    if (classWithoutStudent.length === 0) return 0;
+
+    const errorWithoutStudent = calculateCompositeSwapScore_V3(data, headers, { [cls]: classWithoutStudent }, targetDistribution, weights, null);
+
+    // La perturbation est la réduction de l'erreur si on enlève l'élève
+    return errorWithStudent - errorWithoutStudent;
 }
 
 
