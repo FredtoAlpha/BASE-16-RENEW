@@ -1,13 +1,30 @@
 /**
  * ===================================================================
  * PHASES 1-2-3-4 V3 - _BASEOPTI COMME VIVIER UNIQUE
+ * ⚓ JULES-VERNE-NAUTILUS - VERSION SUBLIMÉE
  * ===================================================================
  *
- * Architecture correcte :
- * - _BASEOPTI = source unique de vérité
- * - Colonne _CLASS_ASSIGNED pour marquer les affectations
- * - Toutes les phases lisent/écrivent dans _BASEOPTI
- * - CACHE rempli à la fin uniquement
+ * Cette version sublime l'algorithme "Optimus Prime" en introduisant
+ * des stratégies avancées pour améliorer la performance et la stabilité.
+ *
+ * 🚀 AMÉLIORATIONS "NAUTILUS" :
+ * 1. ⚡ Moteurs Silencieux (Swap Intelligent) : Au lieu de tester
+ *    tous les swaps possibles (O(n²)), l'algorithme identifie les
+ *    élèves "perturbateurs" (ceux qui dégradent le plus la qualité
+ *    de leur classe) et concentre la recherche sur ce pool restreint.
+ *    - Nouvelle fonction : `calculateStudentDisruption()`
+ *    - `findBestSwap_V3` modifiée pour une recherche ciblée.
+ *
+ * 2. ⚓ Ancre d'Amarrage (Stabilité) : Pour éviter les oscillations
+ *    (échanges répétitifs des mêmes élèves), une pénalité de mouvement
+ *    est introduite. Chaque swap augmente légèrement le "coût" d'un
+ *    futur swap impliquant les mêmes élèves, favorisant une
+ *    convergence plus rapide et stable.
+ *    - `Phase4_balanceScoresSwaps_BASEOPTI_V3` maintient un `swapHistory`.
+ *    - `findBestSwap_V3` applique une pénalité basée sur cet historique.
+ *
+ * Basé sur : claude/optimum-prime-master-01SJDcJv7zHGGBXWhHpzfnxr
+ * Date : 2025-11-13
  */
 
 // ===================================================================
@@ -126,6 +143,10 @@ function Phase2I_applyDissoAsso_BASEOPTI_V3(ctx) {
 
   const ss = ctx.ss || SpreadsheetApp.getActive();
   const baseSheet = ss.getSheetByName('_BASEOPTI');
+
+  if (!baseSheet) {
+    throw new Error('_BASEOPTI introuvable');
+  }
 
   const data = baseSheet.getDataRange().getValues();
   const headers = data[0];
@@ -628,600 +649,343 @@ function copyBaseoptiToCache_V3(ctx) {
 }
 
 // ===================================================================
-// PHASE 3 V3 - COMPLÉTER EFFECTIFS & PARITÉ
+// PHASE 3 V3 - COMPLÉTER EFFECTIFS & PARITÉ (MODULAIRE)
 // ===================================================================
 
 /**
- * Phase 3 V3 : Complète les effectifs et équilibre parité
+ * Phase 3 V3 : Wrapper pour appeler le module de parité adaptative.
  * LIT : _BASEOPTI (élèves non assignés)
  * ÉCRIT : _BASEOPTI (update _CLASS_ASSIGNED)
  */
 function Phase3I_completeAndParity_BASEOPTI_V3(ctx) {
   logLine('INFO', '='.repeat(80));
-  logLine('INFO', '📌 PHASE 3 V3 - Effectifs & Parité (depuis _BASEOPTI)');
+  logLine('INFO', '📌 PHASE 3 V3 - Appel du module de parité adaptative');
   logLine('INFO', '='.repeat(80));
 
-  const ss = ctx.ss || SpreadsheetApp.getActive();
-  const baseSheet = ss.getSheetByName('_BASEOPTI');
-
-  const data = baseSheet.getDataRange().getValues();
-  const headers = data[0];
-
-  const idxAssigned = headers.indexOf('_CLASS_ASSIGNED');
-  const idxSexe = headers.indexOf('SEXE');
-  const idxA = headers.indexOf('ASSO');
-
-  // Calculer besoins par classe
-  const needs = {};
-  (ctx.levels || []).forEach(function(cls) {
-    const target = (ctx.targets && ctx.targets[cls]) || 0;
-    let current = 0;
-
-    for (let i = 1; i < data.length; i++) {
-      if (String(data[i][idxAssigned] || '').trim() === cls) {
-        current++;
-      }
-    }
-
-    needs[cls] = { target: target, current: current, need: target - current };
-  });
-
-  logLine('INFO', '📊 Besoins :');
-  for (const cls in needs) {
-    logLine('INFO', '  ' + cls + ' : ' + needs[cls].current + '/' + needs[cls].target + ' (besoin=' + needs[cls].need + ')');
+  // Vérifier si la fonction modulaire existe
+  if (typeof Phase3I_completeAndParity_PariteAdaptive_V3 !== 'function') {
+    throw new Error("La fonction modulaire 'Phase3I_completeAndParity_PariteAdaptive_V3' est introuvable. Assurez-vous que le fichier Phase3_PariteAdaptive_V3.gs est chargé.");
   }
 
-  // Créer pools F et M (non assignés)
-  const poolF = [];
-  const poolM = [];
-
-  for (let i = 1; i < data.length; i++) {
-    const assigned = String(data[i][idxAssigned] || '').trim();
-    if (assigned) continue; // Déjà placé
-
-    const sexe = String(data[i][idxSexe] || '').toUpperCase();
-    if (sexe === 'F') {
-      poolF.push(i);
-    } else if (sexe === 'M') {
-      poolM.push(i);
-    }
-  }
-
-  logLine('INFO', '👥 Pool disponible : ' + poolF.length + ' F, ' + poolM.length + ' M');
-
-  // 🎯 CALCULER LE RATIO F/M IDÉAL (basé sur les totaux réels)
-  let totalF = 0, totalM = 0;
-  for (let i = 1; i < data.length; i++) {
-    const sexe = String(data[i][idxSexe] || '').toUpperCase();
-    if (sexe === 'F') totalF++;
-    else if (sexe === 'M') totalM++;
-  }
-
-  const totalEleves = totalF + totalM;
-  const ratioF = totalEleves > 0 ? totalF / totalEleves : 0.5;
-  const ratioM = totalEleves > 0 ? totalM / totalEleves : 0.5;
-
-  logLine('INFO', '⚖️ Ratio F/M global : ' + (ratioF * 100).toFixed(1) + '% F / ' + (ratioM * 100).toFixed(1) + '% M');
-  logLine('INFO', '   Total : ' + totalF + ' F, ' + totalM + ' M (' + totalEleves + ' élèves)');
-
-  // Compléter chaque classe
-  const classOrder = Object.keys(needs).sort(function(a, b) {
-    return needs[b].need - needs[a].need;
-  });
-
-  for (let c = 0; c < classOrder.length; c++) {
-    const classe = classOrder[c];
-    let need = needs[classe].need;
-
-    if (need <= 0) continue;
-
-    logLine('INFO', '  🔄 Complétion de ' + classe + ' (' + need + ' élèves)');
-
-    // Compter F/M actuels
-    let countF = 0, countM = 0;
-    for (let i = 1; i < data.length; i++) {
-      if (String(data[i][idxAssigned] || '').trim() === classe) {
-        const sexe = String(data[i][idxSexe] || '').toUpperCase();
-        if (sexe === 'F') countF++;
-        else if (sexe === 'M') countM++;
-      }
-    }
-
-    // 🎯 Calculer la cible F/M idéale pour cette classe
-    const targetTotal = needs[classe].target;
-    const targetF = Math.round(targetTotal * ratioF);
-    const targetM = targetTotal - targetF;
-
-    logLine('INFO', '    🎯 Cible parité : ' + targetF + 'F / ' + targetM + 'M (actuel : ' + countF + 'F / ' + countM + 'M)');
-
-    // Placement selon ratio F/M idéal AVEC VALIDATION DISSO/ASSO
-    let blocked = 0;
-    while (need > 0 && (poolF.length > 0 || poolM.length > 0)) {
-      // ✅ Décision basée sur l'écart par rapport à la cible idéale
-      const ecartF = countF - targetF;
-      const ecartM = countM - targetM;
-      const wantF = ecartF < ecartM; // Prendre F si on est plus loin de la cible F que de la cible M
-
-      let idx = null;
-      let selectedPool = null;
-
-      // 🔒 Chercher un élève compatible dans le pool préféré
-      if (wantF && poolF.length > 0) {
-        for (let i = 0; i < poolF.length; i++) {
-          const check = canPlaceInClass_V3(poolF[i], classe, data, headers);
-          if (check.ok) {
-            idx = poolF.splice(i, 1)[0];
-            selectedPool = 'F';
-            break;
-          }
-        }
-      } else if (!wantF && poolM.length > 0) {
-        for (let i = 0; i < poolM.length; i++) {
-          const check = canPlaceInClass_V3(poolM[i], classe, data, headers);
-          if (check.ok) {
-            idx = poolM.splice(i, 1)[0];
-            selectedPool = 'M';
-            break;
-          }
-        }
-      }
-
-      // 🔒 Si pas trouvé, essayer l'autre pool
-      if (idx === null && poolF.length > 0) {
-        for (let i = 0; i < poolF.length; i++) {
-          const check = canPlaceInClass_V3(poolF[i], classe, data, headers);
-          if (check.ok) {
-            idx = poolF.splice(i, 1)[0];
-            selectedPool = 'F';
-            break;
-          }
-        }
-      }
-
-      if (idx === null && poolM.length > 0) {
-        for (let i = 0; i < poolM.length; i++) {
-          const check = canPlaceInClass_V3(poolM[i], classe, data, headers);
-          if (check.ok) {
-            idx = poolM.splice(i, 1)[0];
-            selectedPool = 'M';
-            break;
-          }
-        }
-      }
-
-      if (idx === null) {
-        blocked++;
-        logLine('WARN', '    ⚠️ Plus d\'élèves compatibles DISSO/ASSO pour ' + classe + ' (need=' + need + ')');
-        break;
-      }
-
-      // ✅ Placement validé
-      data[idx][idxAssigned] = classe;
-      if (selectedPool === 'F') countF++;
-      else if (selectedPool === 'M') countM++;
-      need--;
-    }
-
-    logLine('INFO', '    ✅ ' + classe + ' complété (' + countF + 'F/' + countM + 'M)');
-  }
-
-  // Écrire dans _BASEOPTI
-  baseSheet.getRange(1, 1, data.length, headers.length).setValues(data);
-  SpreadsheetApp.flush();
-
-  // Sync vers colonnes legacy pour compatibilité audit
-  syncClassAssignedToLegacy_('P3');
-
-  // ⚡ OPTIMISATION QUOTA : Ne pas copier vers CACHE en Phase 3 (économiser les appels API)
-  // La copie se fera en Phase 4 finale
-  // copyBaseoptiToCache_V3(ctx);
-
-  // ✅ CALCUL MOBILITÉ : Recalculer après Phase 3 (effectifs complets)
-  if (typeof computeMobilityFlags_ === 'function') {
-    computeMobilityFlags_(ctx);
-  } else {
-    logLine('WARN', '⚠️ computeMobilityFlags_ non disponible (vérifier que Mobility_System.gs est chargé)');
-  }
-
-  // Vérifier élèves non placés
-  let remaining = 0;
-  for (let i = 1; i < data.length; i++) {
-    if (!String(data[i][idxAssigned] || '').trim()) {
-      remaining++;
-    }
-  }
-
-  if (remaining > 0) {
-    logLine('WARN', '⚠️ ' + remaining + ' élèves non placés après P3');
-  }
-
-  logLine('INFO', '✅ PHASE 3 V3 terminée');
-
-  return { ok: true };
+  // Appeler directement la fonction modulaire avec le contexte
+  return Phase3I_completeAndParity_PariteAdaptive_V3(ctx);
 }
 
+function logParityDecision(cls, details) {
+  try {
+    function formatPenalty(value) {
+      if (value === undefined || value === null) return '';
+      if (value === Infinity) return '∞';
+      if (value === -Infinity) return '-∞';
+      return value;
+    }
+
+    const row = [
+      new Date(),
+      'PHASE3_PARITY',
+      cls && cls.name ? cls.name : (cls && cls.id ? cls.id : ''),
+      details.type || '',
+      details.sex || '',
+      details.fromSex || '',
+      details.toSex || '',
+      details.reason || '',
+      formatPenalty(details.penaltyOriginal),
+      formatPenalty(details.penaltyFallback),
+      details.eleveId || ''
+    ];
+
+    if (typeof appendLogRow === 'function') {
+      appendLogRow(row);
+    } else if (typeof logLine === 'function') {
+      logLine('INFO', '📓 P3[' + row[2] + '] ' + JSON.stringify(details));
+    }
+  } catch (err) {
+    if (typeof logLine === 'function') {
+      logLine('WARN', '⚠️ Erreur logParityDecision : ' + err);
+    }
+  }
+}
+
+
+
 // ===================================================================
-// PHASE 4 V3 - SWAPS BASÉS SUR SCORES
+// PHASE 4 V3 - SWAPS BASÉS SUR L'HARMONIE ET LA PARITÉ
 // ===================================================================
 
 /**
- * Phase 4 V3 : Optimise les scores par swaps
- * LIT : _BASEOPTI
- * PRIORITÉ : COM=1 > COM=2 > TRA > PART > ABS
- * RÉCUPÈRE : Poids depuis l'UI via ctx.weights
+ * Phase 4 V3 : Optimise la répartition par swaps en se basant sur un score
+ * composite qui vise à harmoniser la distribution des scores dans les classes
+ * tout en équilibrant la parité F/M.
  */
 function Phase4_balanceScoresSwaps_BASEOPTI_V3(ctx) {
   logLine('INFO', '='.repeat(80));
-  logLine('INFO', '📌 PHASE 4 V3 - Swaps scores (depuis _BASEOPTI)');
+  logLine('INFO', '📌 PHASE 4 V3 - Swaps pour Harmonie & Parité (Version: JULES-VERNE-NAUTILUS)');
   logLine('INFO', '='.repeat(80));
 
-  // Récupérer poids (depuis UI ou défaut)
-  const weights = ctx.weights || {
-    com: 1.0,  // Priorité MAXIMALE
-    tra: 0.7,
-    part: 0.4,
-    abs: 0.2
-  };
-
-  logLine('INFO', '⚖️ Poids : COM=' + weights.com + ', TRA=' + weights.tra + ', PART=' + weights.part + ', ABS=' + weights.abs);
+  const weights = ctx.weights || { parity: 1.0, com: 1.0, tra: 0.5, part: 0.3, abs: 0.2 };
+  logLine('INFO', '⚖️ Poids : ' + JSON.stringify(weights));
 
   const ss = ctx.ss || SpreadsheetApp.getActive();
   const baseSheet = ss.getSheetByName('_BASEOPTI');
-
   const data = baseSheet.getDataRange().getValues();
   const headers = data[0];
 
-  const idxAssigned = headers.indexOf('_CLASS_ASSIGNED');
-  const idxCOM = headers.indexOf('COM');
-  const idxTRA = headers.indexOf('TRA');
-  const idxPART = headers.indexOf('PART');
-  const idxABS = headers.indexOf('ABS');
-  const idxSexe = headers.indexOf('SEXE');
-  const idxMobilite = headers.indexOf('MOBILITE');
-  const idxFixe = headers.indexOf('FIXE');
-  const idxNom = headers.indexOf('NOM');
-
-  // Grouper par classe
   const byClass = {};
   for (let i = 1; i < data.length; i++) {
-    const cls = String(data[i][idxAssigned] || '').trim();
+    const cls = String(data[i][headers.indexOf('_CLASS_ASSIGNED')] || '').trim();
     if (cls) {
       if (!byClass[cls]) byClass[cls] = [];
       byClass[cls].push(i);
     }
   }
 
-  logLine('INFO', '📖 Élèves par classe :');
-  for (const cls in byClass) {
-    logLine('INFO', '  ' + cls + ' : ' + byClass[cls].length + ' élèves');
-  }
-
-  // Calculer variance initiale des distributions
-  const initialDist = calculateScoreDistributions_V3(data, headers, byClass);
-  const initialVariance = calculateDistributionVariance_V3(initialDist, weights);
-  logLine('INFO', '📊 Variance initiale : ' + initialVariance.toFixed(2) + ' (objectif : minimiser)');
-
-  // Optimisation par swaps
+  const targetDistribution = calculateTargetDistribution_V3(data, headers, byClass);
   let swapsApplied = 0;
-  const maxSwaps = ctx.maxSwaps || 100;
-  const maxIterations = maxSwaps * 10;
+  const maxSwaps = ctx.maxSwaps || 500;
 
-  let bestVariance = initialVariance;
-  let stagnation = 0;
+  // Ancre d'amarrage : historique des swaps pour pénaliser les oscillations
+  const swapHistory = new Map();
 
-  for (let iter = 0; iter < maxIterations && swapsApplied < maxSwaps; iter++) {
-    // Trouver meilleur swap
-    const swap = findBestSwap_V3(data, headers, byClass, weights, ctx);
+  for (let iter = 0; iter < maxSwaps; iter++) {
+    const swap = findBestSwap_V3(data, headers, byClass, targetDistribution, weights, ctx, swapHistory);
 
-    if (!swap) {
-      logLine('INFO', '  🛑 Plus de swap bénéfique (iteration=' + iter + ')');
+    if (!swap || !swap.compositeGain || swap.compositeGain <= 0) {
+      logLine('INFO', '  🛑 Plus de swap bénéfique trouvé. Convergence atteinte.');
       break;
     }
 
-    // Appliquer le swap
-    const idx1 = swap.idx1;
-    const idx2 = swap.idx2;
-    const cls1 = String(data[idx1][idxAssigned]);
-    const cls2 = String(data[idx2][idxAssigned]);
+    const { idx1, idx2 } = swap;
+    const cls1 = String(data[idx1][headers.indexOf('_CLASS_ASSIGNED')]);
+    const cls2 = String(data[idx2][headers.indexOf('_CLASS_ASSIGNED')]);
 
-    data[idx1][idxAssigned] = cls2;
-    data[idx2][idxAssigned] = cls1;
+    data[idx1][headers.indexOf('_CLASS_ASSIGNED')] = cls2;
+    data[idx2][headers.indexOf('_CLASS_ASSIGNED')] = cls1;
 
-    // Update byClass
     const pos1 = byClass[cls1].indexOf(idx1);
     const pos2 = byClass[cls2].indexOf(idx2);
-    if (pos1 >= 0) byClass[cls1][pos1] = idx2;
-    if (pos2 >= 0) byClass[cls2][pos2] = idx1;
+    if (pos1 !== -1) byClass[cls1].splice(pos1, 1, idx2);
+    if (pos2 !== -1) byClass[cls2].splice(pos2, 1, idx1);
+
+    // Mise à jour de l'historique des swaps
+    swapHistory.set(idx1, (swapHistory.get(idx1) || 0) + 1);
+    swapHistory.set(idx2, (swapHistory.get(idx2) || 0) + 1);
 
     swapsApplied++;
-
-    if (swapsApplied % 10 === 0) {
-      const newDist = calculateScoreDistributions_V3(data, headers, byClass);
-      const newVariance = calculateDistributionVariance_V3(newDist, weights);
-      const improvement = initialVariance - newVariance; // Positif = amélioration
-      logLine('INFO', '  📊 ' + swapsApplied + ' swaps | variance=' + newVariance.toFixed(2) + ' | amélioration=' + improvement.toFixed(2));
-
-      if (newVariance >= bestVariance) {
-        stagnation++;
-      } else {
-        bestVariance = newVariance;
-        stagnation = 0;
-      }
-
-      if (stagnation >= 5) {
-        logLine('INFO', '  ⏸️ Stagnation détectée');
-        break;
-      }
-    }
   }
 
-  // Écrire dans _BASEOPTI
+  // Finalisation
   baseSheet.getRange(1, 1, data.length, headers.length).setValues(data);
   SpreadsheetApp.flush();
-
-  // Copier vers CACHE
   copyBaseoptiToCache_V3(ctx);
+  if (typeof computeMobilityFlags_ === 'function') computeMobilityFlags_(ctx);
 
-  // ✅ CORRECTION CRITIQUE : Recalculer la mobilité APRÈS la copie vers CACHE
-  // Car copyBaseoptiToCache_V3 efface les colonnes FIXE/MOBILITE (elles sont vides dans _BASEOPTI)
-  if (typeof computeMobilityFlags_ === 'function') {
-    logLine('INFO', '🔒 Recalcul des statuts de mobilité après copie CACHE...');
-    computeMobilityFlags_(ctx);
-    logLine('INFO', '✅ Colonnes FIXE et MOBILITE restaurées dans les onglets CACHE');
-  } else {
-    logLine('WARN', '⚠️ computeMobilityFlags_ non disponible (vérifier que Mobility_System.gs est chargé)');
-  }
+  logLine('INFO', `✅ PHASE 4 V3 (NAUTILUS) terminée : ${swapsApplied} swaps appliqués.`);
 
-  const finalDist = calculateScoreDistributions_V3(data, headers, byClass);
-  const finalVariance = calculateDistributionVariance_V3(finalDist, weights);
-  const totalImprovement = initialVariance - finalVariance;
-  logLine('INFO', '✅ PHASE 4 V3 terminée : ' + swapsApplied + ' swaps, variance=' + finalVariance.toFixed(2) + ' (amélioration=' + totalImprovement.toFixed(2) + ')');
-
-  // ✅ AUDIT COMPLET : Générer un rapport détaillé de fin d'optimisation
-  const auditReport = generateOptimizationAudit_V3(ctx, data, headers, byClass, finalDist, {
-    initialVariance: initialVariance,
-    finalVariance: finalVariance,
-    totalImprovement: totalImprovement,
-    swapsApplied: swapsApplied
-  });
-
-  // Log des distributions finales
-  logLine('INFO', '📊 Distributions finales COM score 1 :');
-  for (const cls in finalDist) {
-    logLine('INFO', '  ' + cls + ' : ' + finalDist[cls].COM[1] + ' élèves COM=1');
-  }
-
+  // Note : le rapport d'audit n'est pas appelé ici car il dépend de métriques qui ne sont plus calculées.
+  // La fonction retourne un statut simple.
   return { 
     ok: true, 
-    swapsApplied: swapsApplied, 
-    swaps: swapsApplied,
-    audit: auditReport 
+    swapsApplied: swapsApplied
   };
 }
 
 /**
- * Calcule les distributions de scores pour chaque classe
- * Retourne : { classe: { COM: {1: count, 2: count, ...}, TRA: {...}, ... } }
+ * Calcule la distribution cible des scores pour chaque critère.
+ * @returns {Object} ex: { COM: { '1': 0.1, '2': 0.2, ... }, ... }
  */
-function calculateScoreDistributions_V3(data, headers, byClass) {
-  const idxCOM = headers.indexOf('COM');
-  const idxTRA = headers.indexOf('TRA');
-  const idxPART = headers.indexOf('PART');
-  const idxABS = headers.indexOf('ABS');
-
-  const distributions = {};
-
-  for (const cls in byClass) {
-    const indices = byClass[cls];
-
-    // Initialiser les compteurs pour chaque score (1-4)
-    distributions[cls] = {
-      COM: { 1: 0, 2: 0, 3: 0, 4: 0 },
-      TRA: { 1: 0, 2: 0, 3: 0, 4: 0 },
-      PART: { 1: 0, 2: 0, 3: 0, 4: 0 },
-      ABS: { 1: 0, 2: 0, 3: 0, 4: 0 }
-    };
-
-    // Compter les scores
-    indices.forEach(function(idx) {
-      const com = Number(data[idx][idxCOM] || 3);
-      const tra = Number(data[idx][idxTRA] || 3);
-      const part = Number(data[idx][idxPART] || 3);
-      const abs = Number(data[idx][idxABS] || 3);
-
-      distributions[cls].COM[com] = (distributions[cls].COM[com] || 0) + 1;
-      distributions[cls].TRA[tra] = (distributions[cls].TRA[tra] || 0) + 1;
-      distributions[cls].PART[part] = (distributions[cls].PART[part] || 0) + 1;
-      distributions[cls].ABS[abs] = (distributions[cls].ABS[abs] || 0) + 1;
-    });
-  }
-
-  return distributions;
-}
-
-/**
- * Calcule la variance des distributions entre classes
- * Plus la variance est basse, plus l'équilibre est bon
- */
-function calculateDistributionVariance_V3(distributions, weights) {
+function calculateTargetDistribution_V3(data, headers, byClass) {
   const criteria = ['COM', 'TRA', 'PART', 'ABS'];
-  const scores = [1, 2, 3, 4];
+  const totalStudents = data.length - 1;
+  const globalCounts = {};
 
-  let totalVariance = 0;
-
-  criteria.forEach(function(criterion) {
-    const weight = weights[criterion.toLowerCase()] || 1.0;
-
-    scores.forEach(function(score) {
-      // Collecter les effectifs pour ce score dans toutes les classes
-      const counts = [];
-      for (const cls in distributions) {
-        counts.push(distributions[cls][criterion][score] || 0);
+  criteria.forEach(crit => {
+    const idx = headers.indexOf(crit);
+    globalCounts[crit] = { '1': 0, '2': 0, '3': 0, '4': 0 };
+    for (let i = 1; i < data.length; i++) {
+      const score = String(data[i][idx] || '3');
+      if (globalCounts[crit][score]) {
+        globalCounts[crit][score]++;
+      } else {
+        globalCounts[crit][score] = 1; // Handle potential other values
       }
-
-      // Calculer la variance
-      const mean = counts.reduce((a, b) => a + b, 0) / counts.length;
-      const variance = counts.reduce((sum, count) => sum + Math.pow(count - mean, 2), 0) / counts.length;
-
-      // Ajouter à la variance totale pondérée
-      // Pour COM et score 1, appliquer un poids encore plus fort
-      const bonus = (criterion === 'COM' && score === 1) ? 2.0 : 1.0;
-      totalVariance += variance * weight * bonus;
-    });
+    }
   });
 
-  return totalVariance;
+  const targetDistribution = {};
+  criteria.forEach(crit => {
+    targetDistribution[crit] = {};
+    for (let s = 1; s <= 4; s++) {
+      targetDistribution[crit][s] = globalCounts[crit][s] / totalStudents;
+    }
+  });
+
+  return targetDistribution;
 }
 
 /**
- * Calcule le score de parité global (somme des |F-M| pour toutes les classes)
- * Plus le score est bas, meilleure est la parité
+ * Calcule "l'erreur d'harmonie" pour un critère et une répartition donnés.
  */
-function calculateParityScore_V3(data, headers, byClass) {
-  const idxSexe = headers.indexOf('SEXE');
-  let totalParityGap = 0;
+function calculateHarmonyError_V3(byClass, data, headers, criterion, targetDistribution) {
+  const idx = headers.indexOf(criterion);
+  let totalError = 0;
 
   for (const cls in byClass) {
-    let countF = 0;
-    let countM = 0;
+    const classSize = byClass[cls].length;
+    const currentCounts = { '1': 0, '2': 0, '3': 0, '4': 0 };
 
-    byClass[cls].forEach(function(idx) {
-      const sexe = String(data[idx][idxSexe] || '').toUpperCase();
-      if (sexe === 'F') countF++;
-      else if (sexe === 'M') countM++;
+    byClass[cls].forEach(studentIdx => {
+      const score = String(data[studentIdx][idx] || '3');
+      if (currentCounts[score]) currentCounts[score]++; else currentCounts[score] = 1;
     });
 
+    for (let s = 1; s <= 4; s++) {
+      const targetCount = targetDistribution[criterion][s] * classSize;
+      totalError += Math.abs(currentCounts[s] - targetCount);
+    }
+  }
+  return totalError;
+}
+
+/**
+ * Calcule le score de parité (somme des |F-M|).
+ */
+function calculateParityError_V3(byClass, data, headers) {
+  const idxSexe = headers.indexOf('SEXE');
+  let totalParityGap = 0;
+  for (const cls in byClass) {
+    let countF = 0, countM = 0;
+    byClass[cls].forEach(idx => {
+      if (String(data[idx][idxSexe] || '').toUpperCase() === 'F') countF++; else countM++;
+    });
     totalParityGap += Math.abs(countF - countM);
   }
-
   return totalParityGap;
 }
 
 /**
- * Trouve le meilleur swap possible
- * Critère principal : variance des scores
- * Critère de départage : parité (si amélioration variance similaire)
+ * Calcule le score composite d'une répartition (erreur totale à minimiser).
  */
-function findBestSwap_V3(data, headers, byClass, weights, ctx) {
+function calculateCompositeSwapScore_V3(data, headers, byClass, targetDistribution, weights, swap) {
+  const criteria = ['COM', 'TRA', 'PART', 'ABS'];
+  let totalError = 0;
+
+  if (swap) { // Simulation rapide
+    const { idx1, idx2 } = swap;
+    const cls1 = String(data[idx1][headers.indexOf('_CLASS_ASSIGNED')]);
+    const cls2 = String(data[idx2][headers.indexOf('_CLASS_ASSIGNED')]);
+
+    const tempByClass = JSON.parse(JSON.stringify(byClass));
+    const pos1 = tempByClass[cls1].indexOf(idx1);
+    const pos2 = tempByClass[cls2].indexOf(idx2);
+    if(pos1 !== -1) tempByClass[cls1].splice(pos1, 1, idx2);
+    if(pos2 !== -1) tempByClass[cls2].splice(pos2, 1, idx1);
+    byClass = tempByClass;
+  }
+
+  // Erreur de parité
+  totalError += calculateParityError_V3(byClass, data, headers) * (weights.parity || 1.0);
+
+  // Erreurs d'harmonie
+  criteria.forEach(crit => {
+    totalError += calculateHarmonyError_V3(byClass, data, headers, crit, targetDistribution) * (weights[crit.toLowerCase()] || 0.1);
+  });
+
+  return totalError;
+}
+
+
+/**
+ * Trouve le meilleur swap possible en maximisant le gain sur le score composite.
+ * Version "Nautilus" : utilise une recherche ciblée et une pénalité de stabilité.
+ * @param {Map} swapHistory - Garde une trace du nombre de fois où chaque élève a été échangé.
+ */
+function findBestSwap_V3(data, headers, byClass, targetDistribution, weights, ctx, swapHistory) {
   const idxMobilite = headers.indexOf('MOBILITE');
   const idxFixe = headers.indexOf('FIXE');
 
   let bestSwap = null;
-  let bestImprovement = 0.001; // Seuil minimum de réduction de variance
-  let bestParityGain = 0; // Gain de parité du meilleur swap
+  let bestCompositeGain = 1e-6;
 
-  const currentDist = calculateScoreDistributions_V3(data, headers, byClass);
-  const currentVariance = calculateDistributionVariance_V3(currentDist, weights);
-  const currentParityScore = calculateParityScore_V3(data, headers, byClass);
+  const errorBefore = calculateCompositeSwapScore_V3(data, headers, byClass, targetDistribution, weights, null);
+  const studentsWithDisruption = [];
 
-  // 📊 Compteurs de debug
-  let tested = 0;
-  let blockedByMobility = 0;
-  let blockedByDissoAsso = 0;
-  let noImprovement = 0;
+  // Moteurs Silencieux - Étape 1: Identifier les élèves "perturbateurs" dans chaque classe.
+  for (const cls in byClass) {
+    byClass[cls].forEach(studentIdx => {
+      const disruptionScore = calculateStudentDisruption(studentIdx, cls, data, headers, byClass, targetDistribution, weights);
+      studentsWithDisruption.push({ studentIdx, cls, disruptionScore });
+    });
+  }
 
-  const classes = Object.keys(byClass);
+  studentsWithDisruption.sort((a, b) => b.disruptionScore - a.disruptionScore);
 
-  // Essayer swaps entre paires de classes
-  for (let i = 0; i < classes.length; i++) {
-    for (let j = i + 1; j < classes.length; j++) {
-      const cls1 = classes[i];
-      const cls2 = classes[j];
+  const topPercent = 0.4;
+  const poolSize = Math.max(10, Math.floor(studentsWithDisruption.length * topPercent));
+  const candidateStudents = studentsWithDisruption.slice(0, poolSize);
 
-      const indices1 = byClass[cls1];
-      const indices2 = byClass[cls2];
+  for (let i = 0; i < candidateStudents.length; i++) {
+    const s1 = candidateStudents[i];
+    const idx1 = s1.studentIdx;
+    const cls1 = s1.cls;
 
-      // Limiter recherche
-      const max = 15;
-      for (let s1 = 0; s1 < Math.min(indices1.length, max); s1++) {
-        const idx1 = indices1[s1];
+    if (String(data[idx1][idxMobilite] || '').toUpperCase() === 'FIXE' || String(data[idx1][idxFixe] || '').toUpperCase() === 'FIXE') continue;
 
-        // Vérifier mobilité
-        const mob1 = String(data[idx1][idxMobilite] || '').toUpperCase();
-        const fixe1 = String(data[idx1][idxFixe] || '').toUpperCase();
-        if (mob1 === 'FIXE' || fixe1 === 'FIXE') {
-          blockedByMobility++;
-          continue;
-        }
+    for (let j = i + 1; j < candidateStudents.length; j++) {
+      const s2 = candidateStudents[j];
+      const idx2 = s2.studentIdx;
+      const cls2 = s2.cls;
 
-        for (let s2 = 0; s2 < Math.min(indices2.length, max); s2++) {
-          const idx2 = indices2[s2];
+      if (cls1 === cls2) continue;
+      if (String(data[idx2][idxMobilite] || '').toUpperCase() === 'FIXE' || String(data[idx2][idxFixe] || '').toUpperCase() === 'FIXE') continue;
 
-          const mob2 = String(data[idx2][idxMobilite] || '').toUpperCase();
-          const fixe2 = String(data[idx2][idxFixe] || '').toUpperCase();
-          if (mob2 === 'FIXE' || fixe2 === 'FIXE') {
-            blockedByMobility++;
-            continue;
-          }
+      const swapCheck = canSwapStudents_V3(idx1, cls1, idx2, cls2, data, headers, ctx);
+      if (!swapCheck.ok) continue;
 
-          tested++;
+      const errorAfter = calculateCompositeSwapScore_V3(data, headers, byClass, targetDistribution, weights, { idx1, idx2 });
+      let compositeGain = errorBefore - errorAfter;
 
-          // 🔒 VÉRIFIER CONTRAINTES DISSO/ASSO/LV2/OPT avant le swap
-          const swapCheck = canSwapStudents_V3(idx1, cls1, idx2, cls2, data, headers, ctx);
-          if (!swapCheck.ok) {
-            blockedByDissoAsso++;
-            continue; // Skip ce swap s'il viole DISSO/ASSO/LV2/OPT
-          }
+      // Ancre d'amarrage : appliquer une pénalité de mouvement pour stabiliser l'algorithme.
+      // Le gain d'un swap est divisé par un facteur qui augmente à chaque fois
+      // qu'un des élèves impliqués est échangé.
+      const history1 = swapHistory.get(idx1) || 0;
+      const history2 = swapHistory.get(idx2) || 0;
+      const penalty = 1 + history1 + history2;
+      const penalizedGain = compositeGain / penalty;
 
-          // Simuler le swap
-          const saved1 = data[idx1][headers.indexOf('_CLASS_ASSIGNED')];
-          const saved2 = data[idx2][headers.indexOf('_CLASS_ASSIGNED')];
-
-          data[idx1][headers.indexOf('_CLASS_ASSIGNED')] = cls2;
-          data[idx2][headers.indexOf('_CLASS_ASSIGNED')] = cls1;
-
-          // Update temporaire byClass
-          byClass[cls1][s1] = idx2;
-          byClass[cls2][s2] = idx1;
-
-          // Calculer nouvelle variance
-          const newDist = calculateScoreDistributions_V3(data, headers, byClass);
-          const newVariance = calculateDistributionVariance_V3(newDist, weights);
-          const improvement = currentVariance - newVariance; // Positif = réduction de variance = bon
-
-          // Calculer impact sur la parité (critère de départage)
-          const newParityScore = calculateParityScore_V3(data, headers, byClass);
-          const parityGain = currentParityScore - newParityScore; // Positif = amélioration parité
-
-          // Restaurer
-          data[idx1][headers.indexOf('_CLASS_ASSIGNED')] = saved1;
-          data[idx2][headers.indexOf('_CLASS_ASSIGNED')] = saved2;
-          byClass[cls1][s1] = idx1;
-          byClass[cls2][s2] = idx2;
-
-          // Décider si ce swap est meilleur
-          let takeThisSwap = false;
-
-          if (improvement > bestImprovement * 1.02) {
-            // Amélioration variance significativement meilleure (> 2%)
-            takeThisSwap = true;
-          } else if (improvement >= bestImprovement * 0.98 && improvement > 0.001) {
-            // Amélioration variance similaire (écart < 2%), utiliser parité comme départage
-            if (parityGain > bestParityGain) {
-              takeThisSwap = true;
-            }
-          }
-
-          if (takeThisSwap) {
-            bestImprovement = improvement;
-            bestParityGain = parityGain;
-            bestSwap = { idx1: idx1, idx2: idx2, improvement: improvement, parityGain: parityGain };
-          } else {
-            noImprovement++;
-          }
-        }
+      if (penalizedGain > bestCompositeGain) {
+        bestCompositeGain = penalizedGain;
+        bestSwap = { idx1, idx2, compositeGain: penalizedGain }; // On stocke le gain pénalisé pour la comparaison
       }
     }
   }
 
-  // 📊 Log des statistiques de recherche
-  if (tested > 0 || blockedByMobility > 0 || blockedByDissoAsso > 0) {
-    logLine('INFO', '  🔍 Recherche swap : ' + tested + ' testés, ' + blockedByMobility + ' bloqués (mobilité), ' +
-            blockedByDissoAsso + ' bloqués (DISSO/ASSO), ' + noImprovement + ' sans amélioration');
-  }
-
   return bestSwap;
 }
+
+/**
+ * Calcule le "score de perturbation" d'un élève (stratégie "Moteurs Silencieux").
+ * Cette fonction mesure à quel point un élève contribue négativement au score composite
+ * (l'erreur) de sa classe actuelle. Un score de perturbation élevé signifie que le profil
+ * de l'élève s'éloigne significativement de la composition idéale de la classe,
+ * faisant de lui un excellent candidat pour un swap.
+ *
+ * @returns {number} Le score de perturbation (réduction de l'erreur si l'élève est retiré).
+ */
+function calculateStudentDisruption(studentIdx, cls, data, headers, byClass, targetDistribution, weights) {
+    const errorWithStudent = calculateCompositeSwapScore_V3(data, headers, { [cls]: byClass[cls] }, targetDistribution, weights, null);
+
+    // Simuler le retrait de l'élève
+    const classWithoutStudent = byClass[cls].filter(idx => idx !== studentIdx);
+
+    // Si la classe devient vide, la perturbation est nulle.
+    if (classWithoutStudent.length === 0) return 0;
+
+    const errorWithoutStudent = calculateCompositeSwapScore_V3(data, headers, { [cls]: classWithoutStudent }, targetDistribution, weights, null);
+
+    // La perturbation est la réduction de l'erreur si on enlève l'élève
+    return errorWithStudent - errorWithoutStudent;
+}
+
 
 // ===================================================================
 // SYNC LEGACY COLUMNS FOR AUDIT COMPATIBILITY
@@ -1585,8 +1349,10 @@ function generateOptimizationAudit_V3(ctx, data, headers, byClass, distributions
   logLine('INFO', '  Parité F/M : moyenne=' + report.quality.parity.avg + '% F, écart-type=' + report.quality.parity.ecartType);
 
   // Métriques d'optimisation
-  logLine('INFO', '  Variance scores : initiale=' + metrics.initialVariance.toFixed(2) + ', finale=' + metrics.finalVariance.toFixed(2));
-  logLine('INFO', '  Amélioration : ' + metrics.totalImprovement.toFixed(2) + ' (' + (metrics.totalImprovement / metrics.initialVariance * 100).toFixed(1) + '%)');
+  logLine('INFO', '  Harmonie académique pondérée : initiale=' + metrics.initialAcademic.toFixed(2) + ', finale=' + metrics.finalAcademic.toFixed(2) + ' (Δ=' + metrics.academicImprovement.toFixed(2) + ')');
+  logLine('INFO', '  Parité totale |F-M| : initiale=' + metrics.initialParity.toFixed(2) + ', finale=' + metrics.finalParity.toFixed(2) + ' (Δ=' + metrics.parityImprovement.toFixed(2) + ')');
+  logLine('INFO', '  Score composite : initial=' + metrics.initialComposite.toFixed(2) + ', final=' + metrics.finalComposite.toFixed(2) + ' (Δ=' + metrics.compositeImprovement.toFixed(2) + ')');
+  logLine('INFO', '  Harmonisation détaillée : COM=' + metrics.distributionImprovements.COM.toFixed(2) + ', TRA=' + metrics.distributionImprovements.TRA.toFixed(2) + ', PART=' + metrics.distributionImprovements.PART.toFixed(2) + ', ABS=' + metrics.distributionImprovements.ABS.toFixed(2));
   logLine('INFO', '  Swaps appliqués : ' + metrics.swapsApplied);
 
   // ========== 5. SYNTHÈSE ==========
@@ -1598,7 +1364,10 @@ function generateOptimizationAudit_V3(ctx, data, headers, byClass, distributions
   logLine('INFO', '  Parité globale : ' + report.global.parityRatio + '% F');
   logLine('INFO', '  Groupes ASSO : ' + assoKeys.length);
   logLine('INFO', '  Codes DISSO : ' + dissoKeys.length);
-  logLine('INFO', '  Amélioration variance : ' + (metrics.totalImprovement / metrics.initialVariance * 100).toFixed(1) + '%');
+  const improvementRatio = metrics.initialComposite !== 0
+    ? (metrics.compositeImprovement / metrics.initialComposite * 100).toFixed(1)
+    : 'N/A';
+  logLine('INFO', '  Amélioration composite : ' + improvementRatio + '%');
 
   logLine('INFO', '');
   logLine('INFO', '═══════════════════════════════════════════════════════');
