@@ -708,6 +708,43 @@ function logParityDecision(cls, details) {
 
 
 
+function logParityDecision(cls, details) {
+  try {
+    function formatPenalty(value) {
+      if (value === undefined || value === null) return '';
+      if (value === Infinity) return '∞';
+      if (value === -Infinity) return '-∞';
+      return value;
+    }
+
+    const row = [
+      new Date(),
+      'PHASE3_PARITY',
+      cls && cls.name ? cls.name : (cls && cls.id ? cls.id : ''),
+      details.type || '',
+      details.sex || '',
+      details.fromSex || '',
+      details.toSex || '',
+      details.reason || '',
+      formatPenalty(details.penaltyOriginal),
+      formatPenalty(details.penaltyFallback),
+      details.eleveId || ''
+    ];
+
+    if (typeof appendLogRow === 'function') {
+      appendLogRow(row);
+    } else if (typeof logLine === 'function') {
+      logLine('INFO', '📓 P3[' + row[2] + '] ' + JSON.stringify(details));
+    }
+  } catch (err) {
+    if (typeof logLine === 'function') {
+      logLine('WARN', '⚠️ Erreur logParityDecision : ' + err);
+    }
+  }
+}
+
+
+
 // ===================================================================
 // PHASE 4 V3 - SWAPS BASÉS SUR L'HARMONIE ET LA PARITÉ
 // ===================================================================
@@ -902,6 +939,8 @@ function calculateCompositeSwapScore_V3(data, headers, byClass, targetDistributi
 function findBestSwap_V3(data, headers, byClass, targetDistribution, weights, ctx, swapHistory) {
   const idxMobilite = headers.indexOf('MOBILITE');
   const idxFixe = headers.indexOf('FIXE');
+  const idxAssigned = headers.indexOf('_CLASS_ASSIGNED');
+  const idxSexe = headers.indexOf('SEXE');
 
   let bestSwap = null;
   let bestCompositeGain = 1e-6;
