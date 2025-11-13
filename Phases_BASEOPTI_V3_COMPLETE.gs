@@ -1089,18 +1089,17 @@ function logParityDecision(cls, details) {
 
 
 // ===================================================================
-// PHASE 4 V3 - SWAPS BASÉS SUR SCORES
+// PHASE 4 V3 - SWAPS BASÉS SUR L'HARMONIE ET LA PARITÉ
 // ===================================================================
 
 /**
- * Phase 4 V3 : Optimise les scores par swaps
- * LIT : _BASEOPTI
- * PRIORITÉ : COM=1 > COM=2 > TRA > PART > ABS
- * RÉCUPÈRE : Poids depuis l'UI via ctx.weights
+ * Phase 4 V3 : Optimise la répartition par swaps en se basant sur un score
+ * composite qui vise à harmoniser la distribution des scores dans les classes
+ * tout en équilibrant la parité F/M.
  */
 function Phase4_balanceScoresSwaps_BASEOPTI_V3(ctx) {
   logLine('INFO', '='.repeat(80));
-  logLine('INFO', '📌 PHASE 4 V3 - Swaps scores (depuis _BASEOPTI)');
+  logLine('INFO', '📌 PHASE 4 V3 - Swaps pour Harmonie & Parité');
   logLine('INFO', '='.repeat(80));
 
   // Récupérer poids (depuis UI ou défaut)
@@ -1117,24 +1116,13 @@ function Phase4_balanceScoresSwaps_BASEOPTI_V3(ctx) {
 
   const ss = ctx.ss || SpreadsheetApp.getActive();
   const baseSheet = ss.getSheetByName('_BASEOPTI');
-
   const data = baseSheet.getDataRange().getValues();
   const headers = data[0];
-
-  const idxAssigned = headers.indexOf('_CLASS_ASSIGNED');
-  const idxCOM = headers.indexOf('COM');
-  const idxTRA = headers.indexOf('TRA');
-  const idxPART = headers.indexOf('PART');
-  const idxABS = headers.indexOf('ABS');
-  const idxSexe = headers.indexOf('SEXE');
-  const idxMobilite = headers.indexOf('MOBILITE');
-  const idxFixe = headers.indexOf('FIXE');
-  const idxNom = headers.indexOf('NOM');
 
   // Grouper par classe
   const byClass = {};
   for (let i = 1; i < data.length; i++) {
-    const cls = String(data[i][idxAssigned] || '').trim();
+    const cls = String(data[i][headers.indexOf('_CLASS_ASSIGNED')] || '').trim();
     if (cls) {
       if (!byClass[cls]) byClass[cls] = [];
       byClass[cls].push(i);
@@ -1157,37 +1145,32 @@ function Phase4_balanceScoresSwaps_BASEOPTI_V3(ctx) {
 
   // Optimisation par swaps
   let swapsApplied = 0;
-  const maxSwaps = ctx.maxSwaps || 100;
-  const maxIterations = maxSwaps * 10;
+  const maxSwaps = ctx.maxSwaps || 500;
+  let currentScore = calculateCompositeSwapScore_V3(data, headers, byClass, targetDistribution, weights, null);
 
   let bestComposite = initialComposite;
   let stagnation = 0;
 
-  for (let iter = 0; iter < maxIterations && swapsApplied < maxSwaps; iter++) {
-    // Trouver meilleur swap
-    const swap = findBestSwap_V3(data, headers, byClass, weights, ctx);
-
-    if (!swap) {
-      logLine('INFO', '  🛑 Plus de swap bénéfique (iteration=' + iter + ')');
+    if (!swap || swap.score <= 0) {
+      logLine('INFO', '  🛑 Plus de swap bénéfique trouvé (score=' + (swap ? swap.score.toFixed(3) : 'null') + ').');
       break;
     }
 
     // Appliquer le swap
-    const idx1 = swap.idx1;
-    const idx2 = swap.idx2;
-    const cls1 = String(data[idx1][idxAssigned]);
-    const cls2 = String(data[idx2][idxAssigned]);
+    const { idx1, idx2 } = swap;
+    const cls1 = String(data[idx1][headers.indexOf('_CLASS_ASSIGNED')]);
+    const cls2 = String(data[idx2][headers.indexOf('_CLASS_ASSIGNED')]);
 
-    data[idx1][idxAssigned] = cls2;
-    data[idx2][idxAssigned] = cls1;
+    data[idx1][headers.indexOf('_CLASS_ASSIGNED')] = cls2;
+    data[idx2][headers.indexOf('_CLASS_ASSIGNED')] = cls1;
 
-    // Update byClass
     const pos1 = byClass[cls1].indexOf(idx1);
     const pos2 = byClass[cls2].indexOf(idx2);
-    if (pos1 >= 0) byClass[cls1][pos1] = idx2;
-    if (pos2 >= 0) byClass[cls2][pos2] = idx1;
+    if (pos1 !== -1) byClass[cls1].splice(pos1, 1, idx2);
+    if (pos2 !== -1) byClass[cls2].splice(pos2, 1, idx1);
 
     swapsApplied++;
+    currentScore -= swap.score; // Mettre à jour le score (le score du swap est un gain)
 
     if (swapsApplied % 10 === 0) {
       const metrics = calculateCompositeScore_V3(data, headers, byClass, weights);
@@ -1208,22 +1191,14 @@ function Phase4_balanceScoresSwaps_BASEOPTI_V3(ctx) {
     }
   }
 
-  // Écrire dans _BASEOPTI
+  // Finalisation
   baseSheet.getRange(1, 1, data.length, headers.length).setValues(data);
   SpreadsheetApp.flush();
-
-  // Copier vers CACHE
   copyBaseoptiToCache_V3(ctx);
+  if (typeof computeMobilityFlags_ === 'function') computeMobilityFlags_(ctx);
 
-  // ✅ CORRECTION CRITIQUE : Recalculer la mobilité APRÈS la copie vers CACHE
-  // Car copyBaseoptiToCache_V3 efface les colonnes FIXE/MOBILITE (elles sont vides dans _BASEOPTI)
-  if (typeof computeMobilityFlags_ === 'function') {
-    logLine('INFO', '🔒 Recalcul des statuts de mobilité après copie CACHE...');
-    computeMobilityFlags_(ctx);
-    logLine('INFO', '✅ Colonnes FIXE et MOBILITE restaurées dans les onglets CACHE');
-  } else {
-    logLine('WARN', '⚠️ computeMobilityFlags_ non disponible (vérifier que Mobility_System.gs est chargé)');
-  }
+  const finalError = calculateCompositeSwapScore_V3(data, headers, byClass, targetDistribution, weights, null);
+  const totalImprovement = (currentScore > 0 ? currentScore : finalError) - finalError; // Correction si aucun swap n'a été fait
 
   const finalMetrics = calculateCompositeScore_V3(data, headers, byClass, weights);
   const finalAcademic = finalMetrics.academic;
@@ -1267,58 +1242,44 @@ function Phase4_balanceScoresSwaps_BASEOPTI_V3(ctx) {
     swapsApplied: swapsApplied
   });
 
-  // Log des distributions finales
-  logLine('INFO', '📊 Distributions finales COM score 1 :');
-  for (const cls in finalDist) {
-    logLine('INFO', '  ' + cls + ' : ' + finalDist[cls].COM[1] + ' élèves COM=1');
-  }
-
   return { 
     ok: true, 
-    swapsApplied: swapsApplied, 
-    swaps: swapsApplied,
+    swapsApplied: swapsApplied,
     audit: auditReport 
   };
 }
 
 /**
- * Calcule les distributions de scores pour chaque classe
- * Retourne : { classe: { COM: {1: count, 2: count, ...}, TRA: {...}, ... } }
+ * Calcule la distribution cible des scores pour chaque critère.
+ * @returns {Object} ex: { COM: { '1': 0.1, '2': 0.2, ... }, ... }
  */
-function calculateScoreDistributions_V3(data, headers, byClass) {
-  const idxCOM = headers.indexOf('COM');
-  const idxTRA = headers.indexOf('TRA');
-  const idxPART = headers.indexOf('PART');
-  const idxABS = headers.indexOf('ABS');
+function calculateTargetDistribution_V3(data, headers, byClass) {
+  const criteria = ['COM', 'TRA', 'PART', 'ABS'];
+  const totalStudents = data.length - 1;
+  const globalCounts = {};
 
-  const distributions = {};
+  criteria.forEach(crit => {
+    const idx = headers.indexOf(crit);
+    globalCounts[crit] = { '1': 0, '2': 0, '3': 0, '4': 0 };
+    for (let i = 1; i < data.length; i++) {
+      const score = String(data[i][idx] || '3');
+      if (globalCounts[crit][score]) {
+        globalCounts[crit][score]++;
+      } else {
+        globalCounts[crit][score] = 1; // Handle potential other values
+      }
+    }
+  });
 
-  for (const cls in byClass) {
-    const indices = byClass[cls];
+  const targetDistribution = {};
+  criteria.forEach(crit => {
+    targetDistribution[crit] = {};
+    for (let s = 1; s <= 4; s++) {
+      targetDistribution[crit][s] = globalCounts[crit][s] / totalStudents;
+    }
+  });
 
-    // Initialiser les compteurs pour chaque score (1-4)
-    distributions[cls] = {
-      COM: { 1: 0, 2: 0, 3: 0, 4: 0 },
-      TRA: { 1: 0, 2: 0, 3: 0, 4: 0 },
-      PART: { 1: 0, 2: 0, 3: 0, 4: 0 },
-      ABS: { 1: 0, 2: 0, 3: 0, 4: 0 }
-    };
-
-    // Compter les scores
-    indices.forEach(function(idx) {
-      const com = Number(data[idx][idxCOM] || 3);
-      const tra = Number(data[idx][idxTRA] || 3);
-      const part = Number(data[idx][idxPART] || 3);
-      const abs = Number(data[idx][idxABS] || 3);
-
-      distributions[cls].COM[com] = (distributions[cls].COM[com] || 0) + 1;
-      distributions[cls].TRA[tra] = (distributions[cls].TRA[tra] || 0) + 1;
-      distributions[cls].PART[part] = (distributions[cls].PART[part] || 0) + 1;
-      distributions[cls].ABS[abs] = (distributions[cls].ABS[abs] || 0) + 1;
-    });
-  }
-
-  return distributions;
+  return targetDistribution;
 }
 
 function calculateDistributionTargets_V3(distributions, byClass) {
@@ -1354,7 +1315,6 @@ function calculateDistributionTargets_V3(distributions, byClass) {
         ? globalCounts[criterion][score] / totalStudents
         : 0;
     });
-  });
 
   for (const cls in byClass) {
     const size = byClass[cls].length;
@@ -1403,20 +1363,13 @@ function calculateDistributionErrors_V3(distributions, targets) {
 function calculateParityPenalty_V3(data, headers, byClass) {
   const idxSexe = headers.indexOf('SEXE');
   let totalParityGap = 0;
-
   for (const cls in byClass) {
-    let countF = 0;
-    let countM = 0;
-
-    byClass[cls].forEach(function(idx) {
-      const sexe = String(data[idx][idxSexe] || '').toUpperCase();
-      if (sexe === 'F') countF++;
-      else if (sexe === 'M') countM++;
+    let countF = 0, countM = 0;
+    byClass[cls].forEach(idx => {
+      if (String(data[idx][idxSexe] || '').toUpperCase() === 'F') countF++; else countM++;
     });
-
     totalParityGap += Math.abs(countF - countM);
   }
-
   return totalParityGap;
 }
 
@@ -1458,7 +1411,39 @@ function calculateCompositeScore_V3(data, headers, byClass, weights) {
 /**
  * Trouve le meilleur swap possible en minimisant le score composite (harmonie académique + parité).
  */
-function findBestSwap_V3(data, headers, byClass, weights, ctx) {
+function calculateCompositeSwapScore_V3(data, headers, byClass, targetDistribution, weights, swap) {
+  const criteria = ['COM', 'TRA', 'PART', 'ABS'];
+  let totalError = 0;
+
+  if (swap) { // Simulation rapide
+    const { idx1, idx2 } = swap;
+    const cls1 = String(data[idx1][headers.indexOf('_CLASS_ASSIGNED')]);
+    const cls2 = String(data[idx2][headers.indexOf('_CLASS_ASSIGNED')]);
+
+    const tempByClass = JSON.parse(JSON.stringify(byClass));
+    const pos1 = tempByClass[cls1].indexOf(idx1);
+    const pos2 = tempByClass[cls2].indexOf(idx2);
+    if(pos1 !== -1) tempByClass[cls1].splice(pos1, 1, idx2);
+    if(pos2 !== -1) tempByClass[cls2].splice(pos2, 1, idx1);
+    byClass = tempByClass;
+  }
+
+  // Erreur de parité
+  totalError += calculateParityError_V3(byClass, data, headers) * (weights.parity || 1.0);
+
+  // Erreurs d'harmonie
+  criteria.forEach(crit => {
+    totalError += calculateHarmonyError_V3(byClass, data, headers, crit, targetDistribution) * (weights[crit.toLowerCase()] || 0.1);
+  });
+
+  return totalError;
+}
+
+
+/**
+ * Trouve le meilleur swap possible en maximisant le gain sur le score composite.
+ */
+function findBestSwap_V3(data, headers, byClass, targetDistribution, weights, ctx) {
   const idxMobilite = headers.indexOf('MOBILITE');
   const idxFixe = headers.indexOf('FIXE');
   const idxAssigned = headers.indexOf('_CLASS_ASSIGNED');
@@ -1511,33 +1496,11 @@ function findBestSwap_V3(data, headers, byClass, weights, ctx) {
       const cls1 = classes[i];
       const cls2 = classes[j];
 
-      const indices1 = byClass[cls1];
-      const indices2 = byClass[cls2];
+      byClass[cls1].forEach(idx1 => {
+        if (String(data[idx1][idxMobilite] || '').toUpperCase() === 'FIXE' || String(data[idx1][idxFixe] || '').toUpperCase() === 'FIXE') return;
 
-      // Limiter recherche
-      const max = 15;
-      for (let s1 = 0; s1 < Math.min(indices1.length, max); s1++) {
-        const idx1 = indices1[s1];
-
-        // Vérifier mobilité
-        const mob1 = String(data[idx1][idxMobilite] || '').toUpperCase();
-        const fixe1 = String(data[idx1][idxFixe] || '').toUpperCase();
-        if (mob1 === 'FIXE' || fixe1 === 'FIXE') {
-          blockedByMobility++;
-          continue;
-        }
-
-        for (let s2 = 0; s2 < Math.min(indices2.length, max); s2++) {
-          const idx2 = indices2[s2];
-
-          const mob2 = String(data[idx2][idxMobilite] || '').toUpperCase();
-          const fixe2 = String(data[idx2][idxFixe] || '').toUpperCase();
-          if (mob2 === 'FIXE' || fixe2 === 'FIXE') {
-            blockedByMobility++;
-            continue;
-          }
-
-          tested++;
+        byClass[cls2].forEach(idx2 => {
+          if (String(data[idx2][idxMobilite] || '').toUpperCase() === 'FIXE' || String(data[idx2][idxFixe] || '').toUpperCase() === 'FIXE') return;
 
           if (enforceParityTolerance) {
             const sexe1 = String(data[idx1][idxSexe] || '').toUpperCase();
@@ -1558,10 +1521,7 @@ function findBestSwap_V3(data, headers, byClass, weights, ctx) {
 
           // 🔒 VÉRIFIER CONTRAINTES DISSO/ASSO/LV2/OPT avant le swap
           const swapCheck = canSwapStudents_V3(idx1, cls1, idx2, cls2, data, headers, ctx);
-          if (!swapCheck.ok) {
-            blockedByDissoAsso++;
-            continue; // Skip ce swap s'il viole DISSO/ASSO/LV2/OPT
-          }
+          if (!swapCheck.ok) return;
 
           // Simuler le swap
           const saved1 = data[idx1][idxAssigned];
@@ -1633,8 +1593,8 @@ function findBestSwap_V3(data, headers, byClass, weights, ctx) {
           } else {
             noImprovement++;
           }
-        }
-      }
+        });
+      });
     }
   }
 
