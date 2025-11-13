@@ -841,29 +841,28 @@ function Phase3I_completeAndParity_BASEOPTI_V3(ctx) {
 }
 
 // ===================================================================
-// PHASE 4 V3 - SWAPS BASÉS SUR SCORES
+// PHASE 4 V3 - SWAPS BASÉS SUR SCORES ET PARITÉ
 // ===================================================================
 
 /**
- * Phase 4 V3 : Optimise les scores par swaps
- * LIT : _BASEOPTI
- * PRIORITÉ : COM=1 > COM=2 > TRA > PART > ABS
- * RÉCUPÈRE : Poids depuis l'UI via ctx.weights
+ * Phase 4 V3 : Optimise la répartition par swaps en se basant sur un score
+ * composite qui inclut les scores académiques ET la parité F/M.
  */
 function Phase4_balanceScoresSwaps_BASEOPTI_V3(ctx) {
   logLine('INFO', '='.repeat(80));
-  logLine('INFO', '📌 PHASE 4 V3 - Swaps scores (depuis _BASEOPTI)');
+  logLine('INFO', '📌 PHASE 4 V3 - Swaps scores & parité (depuis _BASEOPTI)');
   logLine('INFO', '='.repeat(80));
 
   // Récupérer poids (depuis UI ou défaut)
   const weights = ctx.weights || {
-    com: 1.0,  // Priorité MAXIMALE
+    com: 1.0,
     tra: 0.7,
     part: 0.4,
-    abs: 0.2
+    abs: 0.2,
+    parity: 0.3 // ✅ POIDS POUR LA PARITÉ
   };
 
-  logLine('INFO', '⚖️ Poids : COM=' + weights.com + ', TRA=' + weights.tra + ', PART=' + weights.part + ', ABS=' + weights.abs);
+  logLine('INFO', '⚖️ Poids : COM=' + (weights.com || 0) + ', TRA=' + (weights.tra || 0) + ', PART=' + (weights.part || 0) + ', ABS=' + (weights.abs || 0) + ', PARITY=' + (weights.parity || 0));
 
   const ss = ctx.ss || SpreadsheetApp.getActive();
   const baseSheet = ss.getSheetByName('_BASEOPTI');
@@ -871,20 +870,10 @@ function Phase4_balanceScoresSwaps_BASEOPTI_V3(ctx) {
   const data = baseSheet.getDataRange().getValues();
   const headers = data[0];
 
-  const idxAssigned = headers.indexOf('_CLASS_ASSIGNED');
-  const idxCOM = headers.indexOf('COM');
-  const idxTRA = headers.indexOf('TRA');
-  const idxPART = headers.indexOf('PART');
-  const idxABS = headers.indexOf('ABS');
-  const idxSexe = headers.indexOf('SEXE');
-  const idxMobilite = headers.indexOf('MOBILITE');
-  const idxFixe = headers.indexOf('FIXE');
-  const idxNom = headers.indexOf('NOM');
-
   // Grouper par classe
   const byClass = {};
   for (let i = 1; i < data.length; i++) {
-    const cls = String(data[i][idxAssigned] || '').trim();
+    const cls = String(data[i][headers.indexOf('_CLASS_ASSIGNED')] || '').trim();
     if (cls) {
       if (!byClass[cls]) byClass[cls] = [];
       byClass[cls].push(i);
@@ -896,112 +885,104 @@ function Phase4_balanceScoresSwaps_BASEOPTI_V3(ctx) {
     logLine('INFO', '  ' + cls + ' : ' + byClass[cls].length + ' élèves');
   }
 
-  // Calculer variance initiale des distributions
-  const initialDist = calculateScoreDistributions_V3(data, headers, byClass);
-  const initialVariance = calculateDistributionVariance_V3(initialDist, weights);
-  logLine('INFO', '📊 Variance initiale : ' + initialVariance.toFixed(2) + ' (objectif : minimiser)');
+  // Calculer le score composite initial
+  const initialCompositeScore = calculateCompositeScore_V3(data, headers, byClass, weights);
+  logLine('INFO', '📊 Score composite initial : ' + initialCompositeScore.toFixed(2) + ' (objectif : minimiser)');
 
   // Optimisation par swaps
   let swapsApplied = 0;
   const maxSwaps = ctx.maxSwaps || 100;
   const maxIterations = maxSwaps * 10;
 
-  let bestVariance = initialVariance;
+  let bestCompositeScore = initialCompositeScore;
   let stagnation = 0;
 
   for (let iter = 0; iter < maxIterations && swapsApplied < maxSwaps; iter++) {
-    // Trouver meilleur swap
+    // Trouver le meilleur swap basé sur le score composite
     const swap = findBestSwap_V3(data, headers, byClass, weights, ctx);
 
     if (!swap) {
-      logLine('INFO', '  🛑 Plus de swap bénéfique (iteration=' + iter + ')');
+      logLine('INFO', '  🛑 Plus de swap bénéfique trouvé (iteration=' + iter + ')');
       break;
     }
 
     // Appliquer le swap
     const idx1 = swap.idx1;
     const idx2 = swap.idx2;
-    const cls1 = String(data[idx1][idxAssigned]);
-    const cls2 = String(data[idx2][idxAssigned]);
+    const cls1 = String(data[idx1][headers.indexOf('_CLASS_ASSIGNED')]);
+    const cls2 = String(data[idx2][headers.indexOf('_CLASS_ASSIGNED')]);
 
-    data[idx1][idxAssigned] = cls2;
-    data[idx2][idxAssigned] = cls1;
+    data[idx1][headers.indexOf('_CLASS_ASSIGNED')] = cls2;
+    data[idx2][headers.indexOf('_CLASS_ASSIGNED')] = cls1;
 
-    // Update byClass
+    // Mettre à jour `byClass` pour refléter le swap
     const pos1 = byClass[cls1].indexOf(idx1);
     const pos2 = byClass[cls2].indexOf(idx2);
-    if (pos1 >= 0) byClass[cls1][pos1] = idx2;
-    if (pos2 >= 0) byClass[cls2][pos2] = idx1;
+    if (pos1 !== -1 && pos2 !== -1) {
+      byClass[cls1][pos1] = idx2;
+      byClass[cls2][pos2] = idx1;
+    }
 
     swapsApplied++;
 
+    // Logger la progression tous les 10 swaps
     if (swapsApplied % 10 === 0) {
-      const newDist = calculateScoreDistributions_V3(data, headers, byClass);
-      const newVariance = calculateDistributionVariance_V3(newDist, weights);
-      const improvement = initialVariance - newVariance; // Positif = amélioration
-      logLine('INFO', '  📊 ' + swapsApplied + ' swaps | variance=' + newVariance.toFixed(2) + ' | amélioration=' + improvement.toFixed(2));
+      const newCompositeScore = calculateCompositeScore_V3(data, headers, byClass, weights);
+      const improvement = initialCompositeScore - newCompositeScore;
+      logLine('INFO', '  📊 ' + swapsApplied + ' swaps | score=' + newCompositeScore.toFixed(2) + ' | amélioration=' + improvement.toFixed(2));
 
-      if (newVariance >= bestVariance) {
+      if (newCompositeScore >= bestCompositeScore) {
         stagnation++;
       } else {
-        bestVariance = newVariance;
+        bestCompositeScore = newCompositeScore;
         stagnation = 0;
       }
 
       if (stagnation >= 5) {
-        logLine('INFO', '  ⏸️ Stagnation détectée');
+        logLine('INFO', '  ⏸️ Stagnation détectée après ' + swapsApplied + ' swaps.');
         break;
       }
     }
   }
 
-  // Écrire dans _BASEOPTI
+  // Écrire les changements finaux dans _BASEOPTI
   baseSheet.getRange(1, 1, data.length, headers.length).setValues(data);
   SpreadsheetApp.flush();
 
-  // Copier vers CACHE
+  // Copier le résultat vers les onglets CACHE pour l'affichage
   copyBaseoptiToCache_V3(ctx);
 
-  // ✅ CORRECTION CRITIQUE : Recalculer la mobilité APRÈS la copie vers CACHE
-  // Car copyBaseoptiToCache_V3 efface les colonnes FIXE/MOBILITE (elles sont vides dans _BASEOPTI)
+  // Recalculer la mobilité (nécessaire après la copie vers CACHE)
   if (typeof computeMobilityFlags_ === 'function') {
     logLine('INFO', '🔒 Recalcul des statuts de mobilité après copie CACHE...');
     computeMobilityFlags_(ctx);
-    logLine('INFO', '✅ Colonnes FIXE et MOBILITE restaurées dans les onglets CACHE');
-  } else {
-    logLine('WARN', '⚠️ computeMobilityFlags_ non disponible (vérifier que Mobility_System.gs est chargé)');
   }
 
-  const finalDist = calculateScoreDistributions_V3(data, headers, byClass);
-  const finalVariance = calculateDistributionVariance_V3(finalDist, weights);
-  const totalImprovement = initialVariance - finalVariance;
-  logLine('INFO', '✅ PHASE 4 V3 terminée : ' + swapsApplied + ' swaps, variance=' + finalVariance.toFixed(2) + ' (amélioration=' + totalImprovement.toFixed(2) + ')');
+  // Calculs finaux pour le rapport et les logs
+  const finalCompositeScore = calculateCompositeScore_V3(data, headers, byClass, weights);
+  const totalImprovement = initialCompositeScore - finalCompositeScore;
+  logLine('INFO', '✅ PHASE 4 V3 terminée : ' + swapsApplied + ' swaps, score final=' + finalCompositeScore.toFixed(2) + ' (amélioration totale=' + totalImprovement.toFixed(2) + ')');
 
-  // ✅ AUDIT COMPLET : Générer un rapport détaillé de fin d'optimisation
+  // Générer un rapport d'audit détaillé
+  const finalDist = calculateScoreDistributions_V3(data, headers, byClass);
   const auditReport = generateOptimizationAudit_V3(ctx, data, headers, byClass, finalDist, {
-    initialVariance: initialVariance,
-    finalVariance: finalVariance,
+    initialScore: initialCompositeScore,
+    finalScore: finalCompositeScore,
     totalImprovement: totalImprovement,
     swapsApplied: swapsApplied
   });
 
-  // Log des distributions finales
-  logLine('INFO', '📊 Distributions finales COM score 1 :');
-  for (const cls in finalDist) {
-    logLine('INFO', '  ' + cls + ' : ' + finalDist[cls].COM[1] + ' élèves COM=1');
-  }
-
-  return { 
-    ok: true, 
-    swapsApplied: swapsApplied, 
+  return {
+    ok: true,
+    swapsApplied: swapsApplied,
     swaps: swapsApplied,
-    audit: auditReport 
+    audit: auditReport
   };
 }
 
 /**
- * Calcule les distributions de scores pour chaque classe
- * Retourne : { classe: { COM: {1: count, 2: count, ...}, TRA: {...}, ... } }
+ * Calcule les distributions de scores pour chaque classe.
+ * (Fonction inchangée)
  */
 function calculateScoreDistributions_V3(data, headers, byClass) {
   const idxCOM = headers.indexOf('COM');
@@ -1013,69 +994,56 @@ function calculateScoreDistributions_V3(data, headers, byClass) {
 
   for (const cls in byClass) {
     const indices = byClass[cls];
-
-    // Initialiser les compteurs pour chaque score (1-4)
     distributions[cls] = {
       COM: { 1: 0, 2: 0, 3: 0, 4: 0 },
       TRA: { 1: 0, 2: 0, 3: 0, 4: 0 },
       PART: { 1: 0, 2: 0, 3: 0, 4: 0 },
       ABS: { 1: 0, 2: 0, 3: 0, 4: 0 }
     };
-
-    // Compter les scores
     indices.forEach(function(idx) {
       const com = Number(data[idx][idxCOM] || 3);
       const tra = Number(data[idx][idxTRA] || 3);
       const part = Number(data[idx][idxPART] || 3);
       const abs = Number(data[idx][idxABS] || 3);
-
-      distributions[cls].COM[com] = (distributions[cls].COM[com] || 0) + 1;
-      distributions[cls].TRA[tra] = (distributions[cls].TRA[tra] || 0) + 1;
-      distributions[cls].PART[part] = (distributions[cls].PART[part] || 0) + 1;
-      distributions[cls].ABS[abs] = (distributions[cls].ABS[abs] || 0) + 1;
+      if (com >= 1 && com <= 4) distributions[cls].COM[com]++;
+      if (tra >= 1 && tra <= 4) distributions[cls].TRA[tra]++;
+      if (part >= 1 && part <= 4) distributions[cls].PART[part]++;
+      if (abs >= 1 && abs <= 4) distributions[cls].ABS[abs]++;
     });
   }
-
   return distributions;
 }
 
 /**
- * Calcule la variance des distributions entre classes
- * Plus la variance est basse, plus l'équilibre est bon
+ * Calcule la variance des distributions de scores entre classes.
+ * (Fonction inchangée)
  */
 function calculateDistributionVariance_V3(distributions, weights) {
   const criteria = ['COM', 'TRA', 'PART', 'ABS'];
   const scores = [1, 2, 3, 4];
-
   let totalVariance = 0;
 
   criteria.forEach(function(criterion) {
     const weight = weights[criterion.toLowerCase()] || 1.0;
-
     scores.forEach(function(score) {
-      // Collecter les effectifs pour ce score dans toutes les classes
       const counts = [];
       for (const cls in distributions) {
         counts.push(distributions[cls][criterion][score] || 0);
       }
-
-      // Calculer la variance
-      const mean = counts.reduce((a, b) => a + b, 0) / counts.length;
-      const variance = counts.reduce((sum, count) => sum + Math.pow(count - mean, 2), 0) / counts.length;
-
-      // Ajouter à la variance totale pondérée
-      // Pour COM et score 1, appliquer un poids encore plus fort
-      const bonus = (criterion === 'COM' && score === 1) ? 2.0 : 1.0;
-      totalVariance += variance * weight * bonus;
+      if (counts.length > 0) {
+        const mean = counts.reduce((a, b) => a + b, 0) / counts.length;
+        const variance = counts.reduce((sum, count) => sum + Math.pow(count - mean, 2), 0) / counts.length;
+        const bonus = (criterion === 'COM' && score === 1) ? 2.0 : 1.0;
+        totalVariance += variance * weight * bonus;
+      }
     });
   });
-
   return totalVariance;
 }
 
 /**
- * Calcule le score de parité global (somme des |F-M| pour toutes les classes)
- * Plus le score est bas, meilleure est la parité
+ * Calcule le score de parité global (somme des |F-M| sur toutes les classes).
+ * (Fonction inchangée)
  */
 function calculateParityScore_V3(data, headers, byClass) {
   const idxSexe = headers.indexOf('SEXE');
@@ -1084,140 +1052,98 @@ function calculateParityScore_V3(data, headers, byClass) {
   for (const cls in byClass) {
     let countF = 0;
     let countM = 0;
-
     byClass[cls].forEach(function(idx) {
       const sexe = String(data[idx][idxSexe] || '').toUpperCase();
       if (sexe === 'F') countF++;
       else if (sexe === 'M') countM++;
     });
-
     totalParityGap += Math.abs(countF - countM);
   }
-
   return totalParityGap;
 }
 
 /**
- * Trouve le meilleur swap possible
- * Critère principal : variance des scores
- * Critère de départage : parité (si amélioration variance similaire)
+ * ✅ NOUVEAU : Calcule un score composite qui combine la variance des scores
+ * et une pénalité pour le déséquilibre de parité. Un score plus bas est meilleur.
+ */
+function calculateCompositeScore_V3(data, headers, byClass, weights) {
+  const scoreVariance = calculateDistributionVariance_V3(calculateScoreDistributions_V3(data, headers, byClass), weights);
+  const parityGap = calculateParityScore_V3(data, headers, byClass);
+  const parityWeight = (weights && weights.parity) || 0.0;
+  return scoreVariance + (parityGap * parityWeight);
+}
+
+/**
+ * ✅ MODIFIÉ : Trouve le meilleur swap possible en se basant sur le score composite.
  */
 function findBestSwap_V3(data, headers, byClass, weights, ctx) {
   const idxMobilite = headers.indexOf('MOBILITE');
   const idxFixe = headers.indexOf('FIXE');
+  const idxAssigned = headers.indexOf('_CLASS_ASSIGNED');
 
   let bestSwap = null;
-  let bestImprovement = 0.001; // Seuil minimum de réduction de variance
-  let bestParityGain = 0; // Gain de parité du meilleur swap
+  let bestImprovement = 0.001; // Seuil minimum d'amélioration
 
-  const currentDist = calculateScoreDistributions_V3(data, headers, byClass);
-  const currentVariance = calculateDistributionVariance_V3(currentDist, weights);
-  const currentParityScore = calculateParityScore_V3(data, headers, byClass);
+  const currentCompositeScore = calculateCompositeScore_V3(data, headers, byClass, weights);
 
-  // 📊 Compteurs de debug
-  let tested = 0;
-  let blockedByMobility = 0;
-  let blockedByDissoAsso = 0;
-  let noImprovement = 0;
-
+  let tested = 0, blockedByMobility = 0, blockedByDissoAsso = 0;
   const classes = Object.keys(byClass);
 
-  // Essayer swaps entre paires de classes
   for (let i = 0; i < classes.length; i++) {
     for (let j = i + 1; j < classes.length; j++) {
       const cls1 = classes[i];
       const cls2 = classes[j];
-
       const indices1 = byClass[cls1];
       const indices2 = byClass[cls2];
+      const maxSearch = 15;
 
-      // Limiter recherche
-      const max = 15;
-      for (let s1 = 0; s1 < Math.min(indices1.length, max); s1++) {
+      for (let s1 = 0; s1 < Math.min(indices1.length, maxSearch); s1++) {
         const idx1 = indices1[s1];
-
-        // Vérifier mobilité
-        const mob1 = String(data[idx1][idxMobilite] || '').toUpperCase();
-        const fixe1 = String(data[idx1][idxFixe] || '').toUpperCase();
-        if (mob1 === 'FIXE' || fixe1 === 'FIXE') {
+        if (String(data[idx1][idxMobilite] || '').toUpperCase() === 'FIXE' || String(data[idx1][idxFixe] || '').toUpperCase() === 'FIXE') {
           blockedByMobility++;
           continue;
         }
 
-        for (let s2 = 0; s2 < Math.min(indices2.length, max); s2++) {
+        for (let s2 = 0; s2 < Math.min(indices2.length, maxSearch); s2++) {
           const idx2 = indices2[s2];
-
-          const mob2 = String(data[idx2][idxMobilite] || '').toUpperCase();
-          const fixe2 = String(data[idx2][idxFixe] || '').toUpperCase();
-          if (mob2 === 'FIXE' || fixe2 === 'FIXE') {
+          if (String(data[idx2][idxMobilite] || '').toUpperCase() === 'FIXE' || String(data[idx2][idxFixe] || '').toUpperCase() === 'FIXE') {
             blockedByMobility++;
             continue;
           }
 
           tested++;
-
-          // 🔒 VÉRIFIER CONTRAINTES DISSO/ASSO/LV2/OPT avant le swap
           const swapCheck = canSwapStudents_V3(idx1, cls1, idx2, cls2, data, headers, ctx);
           if (!swapCheck.ok) {
             blockedByDissoAsso++;
-            continue; // Skip ce swap s'il viole DISSO/ASSO/LV2/OPT
+            continue;
           }
 
           // Simuler le swap
-          const saved1 = data[idx1][headers.indexOf('_CLASS_ASSIGNED')];
-          const saved2 = data[idx2][headers.indexOf('_CLASS_ASSIGNED')];
-
-          data[idx1][headers.indexOf('_CLASS_ASSIGNED')] = cls2;
-          data[idx2][headers.indexOf('_CLASS_ASSIGNED')] = cls1;
-
-          // Update temporaire byClass
+          data[idx1][idxAssigned] = cls2;
+          data[idx2][idxAssigned] = cls1;
           byClass[cls1][s1] = idx2;
           byClass[cls2][s2] = idx1;
 
-          // Calculer nouvelle variance
-          const newDist = calculateScoreDistributions_V3(data, headers, byClass);
-          const newVariance = calculateDistributionVariance_V3(newDist, weights);
-          const improvement = currentVariance - newVariance; // Positif = réduction de variance = bon
-
-          // Calculer impact sur la parité (critère de départage)
-          const newParityScore = calculateParityScore_V3(data, headers, byClass);
-          const parityGain = currentParityScore - newParityScore; // Positif = amélioration parité
+          const newCompositeScore = calculateCompositeScore_V3(data, headers, byClass, weights);
+          const improvement = currentCompositeScore - newCompositeScore;
 
           // Restaurer
-          data[idx1][headers.indexOf('_CLASS_ASSIGNED')] = saved1;
-          data[idx2][headers.indexOf('_CLASS_ASSIGNED')] = saved2;
+          data[idx1][idxAssigned] = cls1;
+          data[idx2][idxAssigned] = cls2;
           byClass[cls1][s1] = idx1;
           byClass[cls2][s2] = idx2;
 
-          // Décider si ce swap est meilleur
-          let takeThisSwap = false;
-
-          if (improvement > bestImprovement * 1.02) {
-            // Amélioration variance significativement meilleure (> 2%)
-            takeThisSwap = true;
-          } else if (improvement >= bestImprovement * 0.98 && improvement > 0.001) {
-            // Amélioration variance similaire (écart < 2%), utiliser parité comme départage
-            if (parityGain > bestParityGain) {
-              takeThisSwap = true;
-            }
-          }
-
-          if (takeThisSwap) {
+          if (improvement > bestImprovement) {
             bestImprovement = improvement;
-            bestParityGain = parityGain;
-            bestSwap = { idx1: idx1, idx2: idx2, improvement: improvement, parityGain: parityGain };
-          } else {
-            noImprovement++;
+            bestSwap = { idx1: idx1, idx2: idx2, improvement: improvement };
           }
         }
       }
     }
   }
 
-  // 📊 Log des statistiques de recherche
-  if (tested > 0 || blockedByMobility > 0 || blockedByDissoAsso > 0) {
-    logLine('INFO', '  🔍 Recherche swap : ' + tested + ' testés, ' + blockedByMobility + ' bloqués (mobilité), ' +
-            blockedByDissoAsso + ' bloqués (DISSO/ASSO), ' + noImprovement + ' sans amélioration');
+  if (tested > 0) {
+    logLine('INFO', '  🔍 Recherche swap : ' + tested + ' testés, ' + blockedByMobility + ' bloqués (mobilité), ' + blockedByDissoAsso + ' bloqués (DISSO/ASSO)');
   }
 
   return bestSwap;
