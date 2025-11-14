@@ -33,9 +33,10 @@ function makeCtxFromSourceSheets_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const allSheets = ss.getSheets();
 
-  // Détecter les onglets sources (ECOLE ou niveau sans suffixe)
+  // Détecter les onglets sources (formats multiples supportés)
   const sourceSheets = [];
-  const sourcePattern = /^(ECOLE\d+|[3-6]°\d+)$/; // ECOLE1, 6°1, 5°1, 4°1, 3°1
+  // Pattern: ECOLE1, 6°1, 5°1, 4°1, 3°1, GAMARRA°4, etc.
+  const sourcePattern = /^(ECOLE\d+|[A-Za-z0-9_-]+°\d+)$/;
 
   for (const sheet of allSheets) {
     const name = sheet.getName();
@@ -45,7 +46,13 @@ function makeCtxFromSourceSheets_() {
   }
 
   if (sourceSheets.length === 0) {
-    throw new Error('❌ Aucun onglet source trouvé ! Veuillez d\'abord initialiser le système (créer ECOLE1, ECOLE2, etc.)');
+    throw new Error(
+      '❌ Aucun onglet source trouvé !\n\n' +
+      'Formats supportés:\n' +
+      '• Classique: 6°1, 5°1, 4°1, 3°1, etc.\n' +
+      '• ECOLE: ECOLE1, ECOLE2, etc.\n' +
+      '• Personnalisé: GAMARRA°4, NOMECOLE°1, etc.'
+    );
   }
 
   sourceSheets.sort();

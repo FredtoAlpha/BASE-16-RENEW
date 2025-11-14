@@ -58,13 +58,15 @@ function compterEffectifs(isTest) {
 }
 
 /**
- * Trouve les onglets sources (format: 6°1, 5°2, etc.)
+ * Trouve les onglets sources
+ * Formats supportés: 6°1, 5°2, ECOLE1, GAMARRA°4, etc.
  */
 function trouverOngletsSources() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheets = ss.getSheets();
-  const regex = /^[3-6]°\d+$/;  // Format 3°1, 4°2, 5°3, 6°4, etc.
-  
+  // Support: 3°1, ECOLE1, GAMARRA°4, etc.
+  const regex = /^(ECOLE\d+|[A-Za-z0-9_-]+°\d+)$/;
+
   return sheets.filter(sheet => {
     const name = sheet.getName();
     return regex.test(name) && !name.includes("TEST") && !name.includes("DEF");
@@ -72,13 +74,15 @@ function trouverOngletsSources() {
 }
 
 /**
- * Trouve les onglets TEST (format: 5°1TEST, 5°2TEST, etc.)
+ * Trouve les onglets TEST
+ * Formats supportés: 5°1TEST, 5°2TEST, GAMARRA°4TEST, etc.
  */
 function trouverOngletsTest() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheets = ss.getSheets();
-  const regex = /^[3-6]°\d+TEST$/;  // Format 3°1TEST, 4°2TEST, etc.
-  
+  // Support: 3°1TEST, GAMARRA°4TEST, etc.
+  const regex = /^[A-Za-z0-9_-]+°\d+TEST$/;
+
   return sheets.filter(sheet => {
     const name = sheet.getName();
     return regex.test(name);

@@ -449,9 +449,10 @@ function legacy_showPipelineStatus() {
     // ========== COLLECTER LES DONNÉES ==========
     const allSheets = ss.getSheets();
 
-    // Détecter onglets sources
+    // Détecter onglets sources (formats multiples supportés)
     const sourceSheets = allSheets.filter(function(s) {
-      return /^(ECOLE\d+|[3-6]°\d+)$/.test(s.getName());
+      // Support: 6°1, ECOLE1, GAMARRA°4, etc.
+      return /^(ECOLE\d+|[A-Za-z0-9_-]+°\d+)$/.test(s.getName());
     });
 
     // Détecter onglets TEST

@@ -110,7 +110,8 @@ function runLegacyDiagnostic(showUI) {
  */
 function checkSourceSheets_(ss) {
   const allSheets = ss.getSheets();
-  const sourcePattern = /^(ECOLE\d+|[3-6]°\d+)$/;
+  // Support formats: 6°1, ECOLE1, GAMARRA°4, etc.
+  const sourcePattern = /^(ECOLE\d+|[A-Za-z0-9_-]+°\d+)$/;
 
   const sourceSheets = allSheets.filter(function(s) {
     return sourcePattern.test(s.getName());
@@ -119,7 +120,7 @@ function checkSourceSheets_(ss) {
   if (sourceSheets.length === 0) {
     return {
       ok: false,
-      message: '❌ Aucun onglet source trouvé (ex: 6°1, ECOLE1)',
+      message: '❌ Aucun onglet source trouvé (ex: 6°1, ECOLE1, GAMARRA°4)',
       sheets: []
     };
   }
