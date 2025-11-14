@@ -1870,8 +1870,16 @@ function enforceParity_(classesState, tolerance, warnings) {
  * Trouve un élève d'un genre donné dans une liste
  */
 function findEleveByGenre_(eleves, genre) {
+  // ✅ CORRECTION : Ne PAS sélectionner un élève avec code ASSO
   for (const eleve of eleves) {
     const g = eleve.Genre || eleve.Sexe || '';
+    const codeA = eleve.ASSO || eleve.A || eleve['Code A'] || '';
+
+    // Ignorer les élèves avec code ASSO
+    if (codeA && codeA !== '') {
+      continue;
+    }
+
     if (genre === 'F' && (g === 'F' || g === 'Fille')) {
       return eleve;
     }
