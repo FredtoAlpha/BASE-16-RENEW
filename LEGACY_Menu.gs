@@ -20,10 +20,12 @@ function createLegacyMenu_PRIME() {
   const ui = SpreadsheetApp.getUi();
 
   ui.createMenu('⚙️ PRIME LEGACY')
+    .addItem('🚀 Lancer Interface Moderne', 'showLegacyInterface')
+    .addSeparator()
     .addItem('📊 Statut Pipeline', 'legacy_showPipelineStatus')
     .addItem('🔍 Diagnostic Pré-Lancement', 'legacy_runDiagnostic_Menu')
     .addSeparator()
-    .addItem('🚀 Pipeline Complet (Sources → TEST)', 'legacy_runFullPipeline_PRIME')
+    .addItem('⚙️ Pipeline Complet (menu)', 'legacy_runFullPipeline_PRIME')
     .addItem('🎯 Pipeline JULES CODEX (Moteurs Silencieux)', 'legacy_runJulesCodex_Menu')
     .addSeparator()
     .addSubMenu(ui.createMenu('🔧 Phases Individuelles')
