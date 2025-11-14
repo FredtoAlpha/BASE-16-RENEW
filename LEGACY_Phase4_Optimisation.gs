@@ -130,6 +130,11 @@ function Phase4_balanceScoresSwaps_LEGACY(ctx) {
               continue;
             }
 
+            // ✅ NOUVEAU : Vérifier la validité du swap avant de simuler
+            if (!isSwapValid_LEGACY(i1, i2, cls1, cls2, allData, byClass, headersRef, ctx)) {
+              continue;
+            }
+
             // Simuler le swap en créant une copie de la structure byClass
             const tempByClass = JSON.parse(JSON.stringify(byClass));
             const indexInCls1 = tempByClass[cls1].indexOf(i1);
@@ -347,4 +352,69 @@ function findLeastPopulatedClass_Phase4(allData, headers, ctx) {
 
   // S'il n'y a pas de classe disponible (par ex. toutes pleines), retourner la première par défaut
   return minClass || (ctx.niveaux && ctx.niveaux.length > 0 ? ctx.niveaux[0] : '6°1');
+}
+
+/**
+ * Vérifie si un swap entre deux élèves (i1, i2) est valide en fonction des contraintes métier.
+ * @param {number} i1 - Index de l'élève 1 dans allData.
+ * @param {number} i2 - Index de l'élève 2 dans allData.
+ * @param {string} cls1 - Classe actuelle de l'élève 1.
+ * @param {string} cls2 - Classe actuelle de l'élève 2.
+ * @param {Array} allData - Toutes les données des élèves.
+ * @param {Object} byClass - La structure des élèves groupés par classe.
+ * @param {Array} headers - Les en-têtes de colonnes.
+ * @param {Object} ctx - Le contexte du pipeline.
+ * @returns {boolean} True si le swap est valide, sinon false.
+ */
+function isSwapValid_LEGACY(i1, i2, cls1, cls2, allData, byClass, headers, ctx) {
+  const idxLV2 = headers.indexOf('LV2');
+  const idxOPT = headers.indexOf('OPT');
+  const idxASSO = headers.indexOf('ASSO');
+  const idxDISSO = headers.indexOf('DISSO');
+
+  const student1 = allData[i1].row;
+  const student2 = allData[i2].row;
+
+  // --- 1. Contraintes LV2 / OPT ---
+  // Un élève ne peut aller dans une classe que si elle propose son option/lv2
+  const opt1 = String(student1[idxLV2] || student1[idxOPT] || '').trim();
+  const opt2 = String(student2[idxLV2] || student2[idxOPT] || '').trim();
+
+  if (opt1) {
+    const quotasCls2 = ctx.quotas[cls2] || {};
+    if (!quotasCls2.hasOwnProperty(opt1)) return false; // La classe 2 ne propose pas l'option
+  }
+  if (opt2) {
+    const quotasCls1 = ctx.quotas[cls1] || {};
+    if (!quotasCls1.hasOwnProperty(opt2)) return false; // La classe 1 ne propose pas l'option
+  }
+
+  // --- 2. Contraintes ASSO ---
+  // Les élèves avec un code ASSO sont considérés comme "fixes" car ils ont été groupés en Phase 2.
+  // Un swap individuel briserait le groupe. L'optimisation ne doit pas les toucher.
+  if (String(student1[idxASSO] || '').trim() || String(student2[idxASSO] || '').trim()) {
+    return false;
+  }
+
+  // --- 3. Contraintes DISSO ---
+  // Vérifier si le swap regroupe des élèves avec le même code DISSO.
+  const disso1 = String(student1[idxDISSO] || '').trim();
+  const disso2 = String(student2[idxDISSO] || '').trim();
+
+  if (disso1) {
+    // Est-ce qu'un élève de la classe 2 a le même code DISSO que l'élève 1 ?
+    for (const studentIndex of byClass[cls2]) {
+      if (studentIndex === i2) continue; // On ignore le partenaire de swap
+      if (String(allData[studentIndex].row[idxDISSO] || '').trim() === disso1) return false;
+    }
+  }
+  if (disso2) {
+    // Est-ce qu'un élève de la classe 1 a le même code DISSO que l'élève 2 ?
+    for (const studentIndex of byClass[cls1]) {
+      if (studentIndex === i1) continue; // On ignore le partenaire de swap
+      if (String(allData[studentIndex].row[idxDISSO] || '').trim() === disso2) return false;
+    }
+  }
+
+  return true; // Si toutes les vérifications passent, le swap est valide.
 }
