@@ -83,12 +83,15 @@ function writeTestHeaders_LEGACY(ctx, targetSheet, testName) {
   // ✅ Trouver l'onglet source correspondant
   let srcName = null;
 
-  // En mode LEGACY, testName est comme "5°1TEST"
-  // On doit trouver l'onglet source correspondant (ex: "6°1" ou "ECOLE1")
-  const destName = testName.replace(ctx.writeTarget, ''); // "5°1"
+  // En mode LEGACY, testName est comme "6°1TEST"
+  // On doit trouver l'onglet source correspondant (ex: "PREVERT°1" ou "ECOLE1")
+  const destName = testName.replace(ctx.writeTarget, ''); // "6°1"
 
-  // Chercher la source qui mappe vers cette destination
-  if (ctx.sourceToDestMapping) {
+  // ✅ Utiliser le mapping inverse pour accès direct
+  if (ctx.destToSourceMapping) {
+    srcName = ctx.destToSourceMapping[destName];
+  } else if (ctx.sourceToDestMapping) {
+    // Fallback ancien code (si destToSourceMapping n'existe pas)
     for (const source in ctx.sourceToDestMapping) {
       if (ctx.sourceToDestMapping[source] === destName) {
         srcName = source;

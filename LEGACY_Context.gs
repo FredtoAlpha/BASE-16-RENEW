@@ -37,12 +37,14 @@ function makeCtxFromSourceSheets_LEGACY() {
   // ========== ÉTAPE 1 : DÉTECTER ONGLETS SOURCES ==========
   const sourceSheets = [];
 
-  // Pattern pour onglets sources : ECOLE1, ECOLE2, 6°1, 6°2, 5°1, 5°2, etc.
-  const sourcePattern = /^(ECOLE\d+|[3-6]°\d+)$/;
+  // Pattern pour onglets sources : ECOLE1, 6°1, ALBEXT°7, BONHOURE°2, etc.
+  const sourcePattern = /^(ECOLE\d+|[A-Za-z0-9_-]+°\d+)$/;
+  // ❌ Exclure les onglets TEST, CACHE, DEF, FIN, etc.
+  const excludePattern = /TEST|CACHE|DEF|FIN|SRC|SOURCE|_CONFIG|_STRUCTURE|_LOG/i;
 
   for (let i = 0; i < allSheets.length; i++) {
     const name = allSheets[i].getName();
-    if (sourcePattern.test(name)) {
+    if (sourcePattern.test(name) && !excludePattern.test(name)) {
       sourceSheets.push(name);
     }
   }

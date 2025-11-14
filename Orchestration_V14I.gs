@@ -35,11 +35,14 @@ function makeCtxFromSourceSheets_() {
 
   // Détecter les onglets sources (ECOLE ou niveau sans suffixe)
   const sourceSheets = [];
-  const sourcePattern = /^(ECOLE\d+|[3-6]°\d+)$/; // ECOLE1, 6°1, 5°1, 4°1, 3°1
+  // ✅ Pattern élargi pour accepter : ECOLE1, 6°1, ALBEXT°7, BONHOURE°2, etc.
+  const sourcePattern = /^(ECOLE\d+|[A-Za-z0-9_-]+°\d+)$/;
+  // ❌ Exclure les onglets TEST, CACHE, DEF, FIN, etc.
+  const excludePattern = /TEST|CACHE|DEF|FIN|SRC|SOURCE|_CONFIG|_STRUCTURE|_LOG/i;
 
   for (const sheet of allSheets) {
     const name = sheet.getName();
-    if (sourcePattern.test(name)) {
+    if (sourcePattern.test(name) && !excludePattern.test(name)) {
       sourceSheets.push(name);
     }
   }
@@ -54,31 +57,40 @@ function makeCtxFromSourceSheets_() {
   // ✅ Lire le mapping CLASSE_ORIGINE → CLASSE_DEST depuis _STRUCTURE
   const sourceToDestMapping = readSourceToDestMapping_();
 
-  // Générer les noms d'onglets TEST (destinations) en utilisant le mapping
-  const testSheets = sourceSheets.map(name => {
-    // Si le mapping existe pour cette source, utiliser la destination mappée
-    if (sourceToDestMapping[name]) {
-      return sourceToDestMapping[name] + 'TEST';
+  // ✅ CORRECTION : Extraire les destinations UNIQUES (éviter les doublons)
+  // Plusieurs sources peuvent mapper vers la même destination (ex: PANASS°5, BUISSON°6, ALBEXT°7 → 6°5)
+  const uniqueDestinations = [];
+  const seenDest = {};
+  const destToSourceMapping = {}; // Mapping inverse pour copier les en-têtes
+
+  for (const sourceName of sourceSheets) {
+    let dest = sourceToDestMapping[sourceName];
+
+    if (!dest) {
+      // Fallback si pas de mapping
+      const match = sourceName.match(/([3-6]°\d+)/);
+      if (match) {
+        dest = match[1];
+      } else {
+        const matchEcole = sourceName.match(/ECOLE(\d+)/);
+        if (matchEcole) {
+          dest = '6°' + matchEcole[1];
+        }
+      }
     }
 
-    // Sinon, fallback sur l'ancien comportement
-    // Extraire le niveau (6°, 5°, etc.)
-    const match = name.match(/([3-6]°\d+)/);
-    if (match) {
-      return match[1] + 'TEST';
+    if (dest) {
+      if (!seenDest[dest]) {
+        uniqueDestinations.push(dest);
+        seenDest[dest] = true;
+        destToSourceMapping[dest] = sourceName; // Première source pour cette dest
+      }
     }
-    // Si c'est ECOLE, on génère 6°X TEST
-    const matchEcole = name.match(/ECOLE(\d+)/);
-    if (matchEcole) {
-      return '6°' + matchEcole[1] + 'TEST';
-    }
-    return name + 'TEST';
-  });
+  }
 
-  // Générer aussi les niveaux de destination (sans suffixe TEST)
-  const niveauxDest = sourceSheets.map(name => {
-    return sourceToDestMapping[name] || name;
-  });
+  // Générer les noms d'onglets TEST pour les destinations uniques
+  const testSheets = uniqueDestinations.map(dest => dest + 'TEST');
+  const niveauxDest = uniqueDestinations;
 
   logLine('INFO', `📋 Onglets TEST à créer: ${testSheets.join(', ')}`);
 
@@ -105,7 +117,8 @@ function makeCtxFromSourceSheets_() {
     levels: niveauxDest,  // ✅ ALIAS pour compatibilité Phase4_BASEOPTI_V2
     srcSheets: sourceSheets,  // Les onglets sources réels (6°1, 6°2, etc.)
     cacheSheets: testSheets,  // Les onglets TEST à créer (5°1TEST, 5°2TEST, etc.)
-    sourceToDestMapping,  // ✅ Ajout du mapping pour utilisation dans les phases
+    sourceToDestMapping,  // ✅ Mapping source → dest (ex: PREVERT°1 → 6°1)
+    destToSourceMapping,  // ✅ Mapping inverse dest → source (ex: 6°1 → PREVERT°1)
     quotas,
     targets,
     tolParite,
