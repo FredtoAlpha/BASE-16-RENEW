@@ -149,6 +149,10 @@ function applyAsso_(classesState, ctx) {
   for (const [codeA, membres] of Object.entries(assoGroups)) {
     if (membres.length < 2) continue;
 
+    // ✅ PROPAGATION DES CONTRAINTES LV2/OPT DANS LE GROUPE ASSO
+    // Si UN SEUL membre a LV2 ou OPT, TOUS les membres doivent l'avoir
+    propagateAssoConstraints_(membres, codeA);
+
     // Trouver la classe la plus représentée
     const classeCounts = {};
     for (const m of membres) {
@@ -176,6 +180,65 @@ function applyAsso_(classesState, ctx) {
   }
 
   return movedCount;
+}
+
+/**
+ * Propage les contraintes LV2/OPT dans un groupe ASSO
+ * RÈGLE : Si UN SEUL membre a une contrainte LV2 ou OPT, TOUS les membres doivent l'avoir
+ * @param {Array} membres - Membres du groupe ASSO [{eleve, classe}, ...]
+ * @param {string} codeA - Code ASSO du groupe
+ */
+function propagateAssoConstraints_(membres, codeA) {
+  // Collecter toutes les contraintes LV2 et OPT présentes dans le groupe
+  const lv2Set = new Set();
+  const optSet = new Set();
+
+  for (const m of membres) {
+    const lv2 = m.eleve.LV2 || m.eleve.Lv2 || '';
+    const opt = m.eleve.OPT || m.eleve.Opt || m.eleve.Option || '';
+
+    if (lv2 && lv2 !== '') {
+      lv2Set.add(String(lv2).trim().toUpperCase());
+    }
+    if (opt && opt !== '') {
+      optSet.add(String(opt).trim().toUpperCase());
+    }
+  }
+
+  // Si aucune contrainte dans le groupe, rien à faire
+  if (lv2Set.size === 0 && optSet.size === 0) {
+    return;
+  }
+
+  // Propager : TOUS les membres doivent avoir les MÊMES contraintes
+  // Si plusieurs contraintes différentes, prendre la première de chaque type
+  const lv2Common = lv2Set.size > 0 ? Array.from(lv2Set)[0] : '';
+  const optCommon = optSet.size > 0 ? Array.from(optSet)[0] : '';
+
+  let propagated = false;
+
+  for (const m of membres) {
+    const eleveLv2 = m.eleve.LV2 || m.eleve.Lv2 || '';
+    const eleveOpt = m.eleve.OPT || m.eleve.Opt || m.eleve.Option || '';
+
+    // Propager LV2 si membre ne l'a pas
+    if (lv2Common && !eleveLv2) {
+      m.eleve.LV2 = lv2Common;
+      propagated = true;
+      logLine('INFO', `  🔒 ASSO ${codeA} : Propagation LV2=${lv2Common} à membre sans LV2`);
+    }
+
+    // Propager OPT si membre ne l'a pas
+    if (optCommon && !eleveOpt) {
+      m.eleve.OPT = optCommon;
+      propagated = true;
+      logLine('INFO', `  🔒 ASSO ${codeA} : Propagation OPT=${optCommon} à membre sans OPT`);
+    }
+  }
+
+  if (propagated && (lv2Set.size > 1 || optSet.size > 1)) {
+    logLine('WARN', `⚠️ ASSO ${codeA} : Contraintes multiples détectées (LV2: ${Array.from(lv2Set).join(', ')}, OPT: ${Array.from(optSet).join(', ')}), uniformisation appliquée`);
+  }
 }
 
 /**
