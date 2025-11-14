@@ -110,11 +110,12 @@ function runLegacyDiagnostic(showUI) {
  */
 function checkSourceSheets_(ss) {
   const allSheets = ss.getSheets();
-  // Support formats: 6°1, ECOLE1, GAMARRA°4, etc.
   const sourcePattern = /^(ECOLE\d+|[A-Za-z0-9_-]+°\d+)$/;
+  const excludePattern = /TEST|CACHE|DEF|FIN|SRC|SOURCE|_CONFIG|_STRUCTURE|_LOG/i;
 
   const sourceSheets = allSheets.filter(function(s) {
-    return sourcePattern.test(s.getName());
+    const name = s.getName();
+    return sourcePattern.test(name) && !excludePattern.test(name);
   });
 
   if (sourceSheets.length === 0) {

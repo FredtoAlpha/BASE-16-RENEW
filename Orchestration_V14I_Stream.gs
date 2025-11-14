@@ -103,11 +103,15 @@ function writeCacheHeaders_(ctx, targetSheet, cacheName) {
   // Trouver l'onglet source pour copier les en-têtes
   let srcName;
 
-  // ✅ FIX: Mode LEGACY avec mapping
-  if (ctx.sourceToDestMapping && ctx.writeTarget === 'TEST') {
-    // En mode LEGACY, cacheName est comme "5°1TEST"
-    // On doit trouver l'onglet source correspondant (6°1)
-    const destName = cacheName.replace(ctx.writeTarget, ''); // "5°1"
+  // ✅ FIX: Mode LEGACY avec mapping inverse
+  if (ctx.destToSourceMapping && ctx.writeTarget === 'TEST') {
+    // En mode LEGACY, cacheName est comme "6°1TEST"
+    // On doit trouver l'onglet source correspondant (ex: PREVERT°1)
+    const destName = cacheName.replace(ctx.writeTarget, ''); // "6°1"
+    srcName = ctx.destToSourceMapping[destName]; // Accès direct !
+  } else if (ctx.sourceToDestMapping && ctx.writeTarget === 'TEST') {
+    // Fallback ancien code (si destToSourceMapping n'existe pas)
+    const destName = cacheName.replace(ctx.writeTarget, ''); // "6°1"
 
     // Chercher la source qui mappe vers cette destination
     for (const [source, dest] of Object.entries(ctx.sourceToDestMapping)) {
