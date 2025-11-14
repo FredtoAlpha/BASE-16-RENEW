@@ -121,7 +121,7 @@ function checkSourceSheets_(ss) {
   if (sourceSheets.length === 0) {
     return {
       ok: false,
-      message: '❌ Aucun onglet source trouvé (ex: 6°1, ECOLE1)',
+      message: '❌ Aucun onglet source trouvé (ex: 6°1, ECOLE1, GAMARRA°4)',
       sheets: []
     };
   }

@@ -52,12 +52,11 @@ function makeCtxFromSourceSheets_LEGACY() {
   if (sourceSheets.length === 0) {
     throw new Error(
       '❌ Aucun onglet source trouvé !\n\n' +
-      'Veuillez d\'abord créer les onglets sources :\n' +
-      '• ECOLE1, ECOLE2, etc. (pour 6e)\n' +
-      '• 6°1, 6°2, etc. (pour 6e)\n' +
-      '• 5°1, 5°2, etc. (pour 5e)\n' +
-      '• 4°1, 4°2, etc. (pour 4e)\n' +
-      '• 3°1, 3°2, etc. (pour 3e)'
+      'Formats supportés pour les onglets sources :\n' +
+      '• Format classique: 6°1, 6°2, 5°1, 5°2, 4°1, 4°2, 3°1, 3°2, etc.\n' +
+      '• Format ECOLE: ECOLE1, ECOLE2, ECOLE3, etc.\n' +
+      '• Format personnalisé: GAMARRA°4, NOMECOLE°1, etc.\n\n' +
+      'Note: Le symbole ° est obligatoire pour les formats personnalisés.'
     );
   }
 
