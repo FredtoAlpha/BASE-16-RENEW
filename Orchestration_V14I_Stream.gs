@@ -139,6 +139,14 @@ function writeCacheHeaders_(ctx, targetSheet, cacheName) {
     logLine('INFO', '    📋 En-têtes copiés de ' + srcName + ' vers ' + cacheName);
   } else {
     logLine('WARN', '⚠️ Impossible de trouver l\'onglet source pour ' + cacheName + ' (cherché: ' + srcName + ')');
+
+    // ✅ Créer des en-têtes par défaut
+    const defaultHeaders = ['NOM', 'PRENOM', 'SEXE', 'LV2', 'OPT', 'COM', 'TRA', 'PART', 'ABS', 'CODE_ASSO', 'CODE_DISSO', '_CLASS_ASSIGNED'];
+    targetSheet.getRange(1, 1, 1, defaultHeaders.length).setValues([defaultHeaders]);
+    targetSheet.getRange(1, 1, 1, defaultHeaders.length)
+      .setFontWeight('bold')
+      .setBackground('#C6E0B4');
+    logLine('INFO', '    ✨ En-têtes par défaut créés pour ' + cacheName);
   }
 }
 
@@ -918,7 +926,7 @@ function computeScoreAveragesByClass_(ctx) {
   const scoresByClass = {};
 
   (ctx.cacheSheets || []).forEach(function(cacheName) {
-    const cls = cacheName.replace(/CACHE$/, '').trim();
+    const cls = cacheName.replace(/CACHE$/, '').replace(/TEST$/, '').trim();
     const sh = (ctx.ss || SpreadsheetApp.getActive()).getSheetByName(cacheName);
 
     if (!sh || sh.getLastRow() < 2) {
@@ -977,6 +985,279 @@ function computeScoreAveragesByClass_(ctx) {
   }
 
   return scoresByClass;
+}
+
+/**
+ * ✅ FINALISATION COMPLÈTE : Applique la MÊME mise en forme que les onglets FIN
+ * - Formatage scores (rouge/jaune/vert clair/vert foncé)
+ * - Formatage LV2 (ITA=vert, ESP=orange, CHAV=violet)
+ * - Moyennes scores avec formules AVERAGE
+ * - Décomptes LV2 et OPT
+ * - Noms en gras, colonnes cachées
+ */
+function finalizeTestSheets_(ctx) {
+  logLine('INFO', '📊 Finalisation onglets TEST : mise en forme COMPLÈTE comme onglets FIN...');
+
+  (ctx.cacheSheets || []).forEach(function(sheetName) {
+    try {
+      const sh = (ctx.ss || SpreadsheetApp.getActive()).getSheetByName(sheetName);
+      if (!sh || sh.getLastRow() < 2) return;
+
+      const data = sh.getDataRange().getValues();
+      const headers = data[0];
+      const numRows = data.length - 1; // Sans l'en-tête
+
+      if (numRows === 0) return;
+
+      // ===== INDICES DES COLONNES =====
+      const idxNom = Math.max(headers.indexOf('NOM'), 0);
+      const idxPrenom = Math.max(headers.indexOf('PRENOM'), headers.indexOf('PRÉNOM'), 1);
+      const idxNomPrenom = headers.indexOf('NOM & PRENOM');
+      const idxSexe = headers.indexOf('SEXE');
+      const idxLV2 = headers.indexOf('LV2');
+      const idxOPT = Math.max(headers.indexOf('OPT'), headers.indexOf('OPTION'));
+      const idxCOM = headers.indexOf('COM');
+      const idxTRA = headers.indexOf('TRA');
+      const idxPART = headers.indexOf('PART');
+      const idxABS = headers.indexOf('ABS');
+      const idxASSO = Math.max(headers.indexOf('CODE_ASSO'), headers.indexOf('ASSO'), headers.indexOf('A'));
+      const idxDISSO = Math.max(headers.indexOf('CODE_DISSO'), headers.indexOf('DISSO'), headers.indexOf('D'));
+
+      // ========== 1. LARGEURS DES COLONNES ==========
+      if (idxNomPrenom >= 0) sh.setColumnWidth(idxNomPrenom + 1, 240);
+      if (idxSexe >= 0) sh.setColumnWidth(idxSexe + 1, 70);
+      if (idxLV2 >= 0) sh.setColumnWidth(idxLV2 + 1, 90);
+      if (idxOPT >= 0) sh.setColumnWidth(idxOPT + 1, 110);
+      if (idxCOM >= 0) sh.setColumnWidth(idxCOM + 1, 75);
+      if (idxTRA >= 0) sh.setColumnWidth(idxTRA + 1, 75);
+      if (idxPART >= 0) sh.setColumnWidth(idxPART + 1, 75);
+      if (idxABS >= 0) sh.setColumnWidth(idxABS + 1, 75);
+      if (idxASSO >= 0) sh.setColumnWidth(idxASSO + 1, 80);
+      if (idxDISSO >= 0) sh.setColumnWidth(idxDISSO + 1, 80);
+
+      // ========== 2. EN-TÊTE (ligne 1) - Violet foncé + Blanc gras + Capitales ==========
+      const headerRange = sh.getRange(1, 1, 1, headers.length);
+      headerRange
+        .setBackground('#5b21b6')
+        .setFontColor('#ffffff')
+        .setFontWeight('bold')
+        .setFontSize(11)
+        .setHorizontalAlignment('center')
+        .setVerticalAlignment('middle');
+
+      // Mettre en capitales
+      const headerValues = headers.map(function(h) { return String(h).toUpperCase(); });
+      sh.getRange(1, 1, 1, headers.length).setValues([headerValues]);
+
+      // ========== 3. FORMATAGE COLONNE NOM & PRENOM - Gras 14pt ==========
+      if (idxNomPrenom >= 0 && numRows > 0) {
+        const namesRange = sh.getRange(2, idxNomPrenom + 1, numRows, 1);
+        namesRange.setFontWeight('bold').setFontSize(14);
+      }
+
+      // ========== 4. FORMATAGE COLONNE SEXE - F=rose, M=bleu ==========
+      if (idxSexe >= 0 && numRows > 0) {
+        for (let r = 1; r <= numRows; r++) {
+          const sexeValue = String(data[r][idxSexe] || '').toUpperCase().trim();
+          const sexeCell = sh.getRange(r + 1, idxSexe + 1);
+          sexeCell.setFontWeight('bold').setFontColor('#000000');
+
+          if (sexeValue === 'F') {
+            sexeCell.setBackground('#fce7f3'); // Rose
+          } else if (sexeValue === 'M') {
+            sexeCell.setBackground('#dbeafe'); // Bleu
+          }
+        }
+      }
+
+      // ========== 5. FORMATAGE COLONNE LV2 - ITA=vert, ESP=orange, CHAV=violet ==========
+      if (idxLV2 >= 0 && numRows > 0) {
+        for (let r = 1; r <= numRows; r++) {
+          const lv2Value = String(data[r][idxLV2] || '').toUpperCase().trim();
+          const lv2Cell = sh.getRange(r + 1, idxLV2 + 1);
+
+          if (lv2Value === 'ITA' || lv2Value === 'ITALIEN') {
+            lv2Cell.setBackground('#86efac').setFontWeight('bold').setFontColor('#000000'); // Vert
+          } else if (lv2Value === 'ESP' || lv2Value === 'ESPAGNOL') {
+            lv2Cell.setBackground('#fb923c').setFontWeight('bold').setFontColor('#000000'); // Orange
+          } else if (lv2Value === 'CHAV') {
+            lv2Cell.setBackground('#5b21b6').setFontWeight('bold').setFontColor('#ffffff'); // Violet
+          } else if (lv2Value) {
+            lv2Cell.setBackground('#000000').setFontWeight('bold').setFontColor('#ffffff'); // Noir
+          }
+        }
+      }
+
+      // ========== 6. FORMATAGE COLONNE OPT - CHAV=violet, autres=gris ==========
+      if (idxOPT >= 0 && numRows > 0) {
+        for (let r = 1; r <= numRows; r++) {
+          const optValue = String(data[r][idxOPT] || '').toUpperCase().trim();
+          const optCell = sh.getRange(r + 1, idxOPT + 1);
+
+          if (optValue === 'CHAV') {
+            optCell.setBackground('#5b21b6').setFontColor('#ffffff').setFontWeight('bold').setHorizontalAlignment('center');
+          } else if (optValue) {
+            optCell.setBackground('#d1d5db').setFontColor('#000000').setFontWeight('bold').setHorizontalAlignment('center');
+          }
+        }
+      }
+
+      // ========== 7. FORMATAGE COLONNE ASSO - Gras noir + Fond bleu SI REMPLI ==========
+      if (idxASSO >= 0 && numRows > 0) {
+        for (let r = 1; r <= numRows; r++) {
+          const assoValue = String(data[r][idxASSO] || '').trim();
+          const assoCell = sh.getRange(r + 1, idxASSO + 1);
+          assoCell.setFontWeight('bold').setFontColor('#000000');
+
+          if (assoValue) {
+            assoCell.setBackground('#3b82f6').setFontColor('#ffffff');
+          }
+        }
+      }
+
+      // ========== 8. FORMATAGE COLONNE DISSO - Blanc gras sur bleu SI REMPLI ==========
+      if (idxDISSO >= 0 && numRows > 0) {
+        for (let r = 1; r <= numRows; r++) {
+          const dissoValue = String(data[r][idxDISSO] || '').trim();
+          const dissoCell = sh.getRange(r + 1, idxDISSO + 1);
+
+          if (dissoValue) {
+            dissoCell.setBackground('#3b82f6').setFontColor('#ffffff').setFontWeight('bold').setHorizontalAlignment('center');
+          }
+        }
+      }
+
+      // ========== 9. FORMATAGE CONDITIONNEL DES SCORES (COM, TRA, PART, ABS) ==========
+      const scoreIndices = [idxCOM, idxTRA, idxPART, idxABS].filter(function(idx) { return idx >= 0; });
+
+      if (numRows > 0) {
+        scoreIndices.forEach(function(colIdx) {
+          for (let r = 1; r <= numRows; r++) {
+            const scoreValue = data[r][colIdx];
+            const scoreCell = sh.getRange(r + 1, colIdx + 1);
+            scoreCell.setHorizontalAlignment('center').setFontWeight('bold');
+
+            if (scoreValue === 1 || scoreValue === '1') {
+              // Score 1 = Rouge + Blanc gras
+              scoreCell.setBackground('#dc2626').setFontColor('#ffffff');
+            } else if (scoreValue === 2 || scoreValue === '2') {
+              // Score 2 = Jaune CLAIR + Noir gras
+              scoreCell.setBackground('#fde047').setFontColor('#000000');
+            } else if (scoreValue === 3 || scoreValue === '3') {
+              // Score 3 = Vert clair + Noir gras
+              scoreCell.setBackground('#86efac').setFontColor('#000000');
+            } else if (scoreValue === 4 || scoreValue === '4') {
+              // Score 4 = Vert foncé + Blanc gras
+              scoreCell.setBackground('#16a34a').setFontColor('#ffffff');
+            }
+          }
+        });
+      }
+
+      // ========== 10. BORDURES POUR TOUTES LES DONNÉES ==========
+      if (numRows > 0) {
+        const dataRange = sh.getRange(2, 1, numRows, headers.length);
+        dataRange.setBorder(true, true, true, true, true, true, '#d1d5db', SpreadsheetApp.BorderStyle.SOLID);
+      }
+
+      // ========== 11. MOYENNES DYNAMIQUES AVEC FORMULES ==========
+      const avgRow = numRows + 4; // +2 pour en-tête, +2 lignes vides
+
+      // Écrire "MOYENNE" dans la première colonne
+      sh.getRange(avgRow, 1).setValue('MOYENNE').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('right');
+
+      const firstDataRow = 2;
+      const lastDataRow = numRows + 1;
+
+      // Créer formules AVERAGE pour chaque score
+      if (idxCOM >= 0) {
+        const colLetter = String.fromCharCode(65 + idxCOM); // A=65, B=66, etc.
+        sh.getRange(avgRow, idxCOM + 1).setFormula('=AVERAGE(' + colLetter + firstDataRow + ':' + colLetter + lastDataRow + ')');
+      }
+      if (idxTRA >= 0) {
+        const colLetter = String.fromCharCode(65 + idxTRA);
+        sh.getRange(avgRow, idxTRA + 1).setFormula('=AVERAGE(' + colLetter + firstDataRow + ':' + colLetter + lastDataRow + ')');
+      }
+      if (idxPART >= 0) {
+        const colLetter = String.fromCharCode(65 + idxPART);
+        sh.getRange(avgRow, idxPART + 1).setFormula('=AVERAGE(' + colLetter + firstDataRow + ':' + colLetter + lastDataRow + ')');
+      }
+      if (idxABS >= 0) {
+        const colLetter = String.fromCharCode(65 + idxABS);
+        sh.getRange(avgRow, idxABS + 1).setFormula('=AVERAGE(' + colLetter + firstDataRow + ':' + colLetter + lastDataRow + ')');
+      }
+
+      // Formater la ligne des moyennes
+      const avgRange = sh.getRange(avgRow, 1, 1, headers.length);
+      avgRange
+        .setBackground('#f3f4f6')
+        .setFontWeight('bold')
+        .setHorizontalAlignment('center')
+        .setFontSize(11)
+        .setNumberFormat('0.00')
+        .setBorder(true, true, true, true, false, false, '#9ca3af', SpreadsheetApp.BorderStyle.SOLID);
+
+      // ========== 12. DÉCOMPTES LV2 ==========
+      if (idxLV2 >= 0) {
+        const lv2Row = avgRow + 2;
+
+        // Compter les occurrences
+        const lv2Counts = {};
+        for (let r = 1; r <= numRows; r++) {
+          const lv2Val = String(data[r][idxLV2] || '').toUpperCase().trim();
+          if (lv2Val) {
+            lv2Counts[lv2Val] = (lv2Counts[lv2Val] || 0) + 1;
+          }
+        }
+
+        sh.getRange(lv2Row, 1).setValue('DÉCOMPTE LV2').setFontWeight('bold').setFontSize(11);
+
+        let lv2Summary = [];
+        for (const lang in lv2Counts) {
+          lv2Summary.push(lang + ': ' + lv2Counts[lang]);
+        }
+
+        if (idxLV2 + 1 <= headers.length) {
+          sh.getRange(lv2Row, idxLV2 + 1).setValue(lv2Summary.join(' | ')).setFontWeight('bold');
+        }
+      }
+
+      // ========== 13. DÉCOMPTES OPT ==========
+      if (idxOPT >= 0) {
+        const optRow = avgRow + 3;
+
+        // Compter les occurrences
+        const optCounts = {};
+        for (let r = 1; r <= numRows; r++) {
+          const optVal = String(data[r][idxOPT] || '').toUpperCase().trim();
+          if (optVal) {
+            optCounts[optVal] = (optCounts[optVal] || 0) + 1;
+          }
+        }
+
+        sh.getRange(optRow, 1).setValue('DÉCOMPTE OPT').setFontWeight('bold').setFontSize(11);
+
+        let optSummary = [];
+        for (const opt in optCounts) {
+          optSummary.push(opt + ': ' + optCounts[opt]);
+        }
+
+        if (idxOPT + 1 <= headers.length) {
+          sh.getRange(optRow, idxOPT + 1).setValue(optSummary.join(' | ')).setFontWeight('bold');
+        }
+      }
+
+      // ========== 14. FIGER L'EN-TÊTE ==========
+      sh.setFrozenRows(1);
+
+      logLine('INFO', '  ✅ ' + sheetName + ' finalisé : ' + numRows + ' élèves, moyennes + décomptes + formatage COMPLET');
+
+    } catch (e) {
+      logLine('ERROR', '  ❌ Erreur finalisation ' + sheetName + ': ' + e.message);
+    }
+  });
+
+  logLine('INFO', '✅ Finalisation onglets TEST terminée avec mise en forme FIN complète');
 }
 
 /**

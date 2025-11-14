@@ -63,17 +63,33 @@ function makeCtxFromSourceSheets_() {
   // ✅ Lire le mapping CLASSE_ORIGINE → CLASSE_DEST depuis _STRUCTURE
   const sourceToDestMapping = readSourceToDestMapping_();
 
-  // ✅ CORRECTION : Extraire les destinations UNIQUES (éviter les doublons)
+  // ✅ CORRECTION : Extraire les destinations UNIQUES depuis le MAPPING (pas seulement les sources existantes)
   // Plusieurs sources peuvent mapper vers la même destination (ex: PANASS°5, BUISSON°6, ALBEXT°7 → 6°5)
   const uniqueDestinations = [];
   const seenDest = {};
   const destToSourceMapping = {}; // Mapping inverse pour copier les en-têtes
+  const sourceSheetSet = new Set(sourceSheets); // Pour vérifier l'existence rapide
 
+  // D'abord, traiter TOUS les mappings depuis _STRUCTURE
+  for (const [sourceName, dest] of Object.entries(sourceToDestMapping)) {
+    if (dest && !seenDest[dest]) {
+      uniqueDestinations.push(dest);
+      seenDest[dest] = true;
+
+      // Trouver la première source qui EXISTE physiquement pour cette destination
+      if (!destToSourceMapping[dest]) {
+        if (sourceSheetSet.has(sourceName)) {
+          destToSourceMapping[dest] = sourceName;
+        }
+      }
+    }
+  }
+
+  // Ensuite, traiter les sources détectées qui n'ont PAS de mapping
   for (const sourceName of sourceSheets) {
-    let dest = sourceToDestMapping[sourceName];
-
-    if (!dest) {
-      // Fallback si pas de mapping
+    if (!sourceToDestMapping[sourceName]) {
+      // Pas de mapping → fallback
+      let dest;
       const match = sourceName.match(/([3-6]°\d+)/);
       if (match) {
         dest = match[1];
@@ -83,13 +99,25 @@ function makeCtxFromSourceSheets_() {
           dest = '6°' + matchEcole[1];
         }
       }
-    }
 
-    if (dest) {
-      if (!seenDest[dest]) {
+      if (dest && !seenDest[dest]) {
         uniqueDestinations.push(dest);
         seenDest[dest] = true;
-        destToSourceMapping[dest] = sourceName; // Première source pour cette dest
+        destToSourceMapping[dest] = sourceName;
+      }
+    }
+  }
+
+  // Pour les destinations sans source existante, utiliser la première source du mapping
+  for (const dest of uniqueDestinations) {
+    if (!destToSourceMapping[dest]) {
+      // Trouver n'importe quelle source qui mappe vers cette destination
+      for (const [src, d] of Object.entries(sourceToDestMapping)) {
+        if (d === dest) {
+          destToSourceMapping[dest] = src;
+          logLine('WARN', `⚠️ Onglet ${src} introuvable, utilisé comme référence pour ${dest}TEST`);
+          break;
+        }
       }
     }
   }
@@ -299,6 +327,13 @@ function runOptimizationV14FullI(options) {
 
     // ✅ AUDIT FINAL : Vérifier conformité CACHE vs STRUCTURE
     const cacheAudit = auditCacheAgainstStructure_(ctx);
+
+    // ✅ FINALISATION : Calcul moyennes et mise en forme onglets TEST
+    try {
+      finalizeTestSheets_(ctx);
+    } catch (e) {
+      logLine('WARN', '⚠️ Erreur lors de la finalisation des onglets TEST : ' + e.message);
+    }
 
     // ✅ Réponse 100% sérialisable et compatible avec l'UI
     const warningsOut = (collectWarnings_(phasesOut) || []).map(function(w) {
@@ -1660,55 +1695,92 @@ function placeRemainingStudents_(classesState, targets, warnings) {
 }
 
 /**
- * Complète les effectifs jusqu'aux cibles
+ * Complète les effectifs et ÉQUILIBRE les classes
+ * ✅ NOUVELLE LOGIQUE : Équilibrage réel au lieu d'atteindre des cibles impossibles
  */
 function reachHeadcountTargets_(classesState, targets, warnings) {
-  // Calculer les effectifs actuels
-  const currentCounts = {};
-  for (const [niveau, eleves] of Object.entries(classesState)) {
-    currentCounts[niveau] = eleves.length;
-  }
+  const maxIterations = 50;
+  let iteration = 0;
 
-  // Pour chaque classe sous la cible, essayer d'équilibrer
-  for (const [niveau, target] of Object.entries(targets)) {
-    const current = currentCounts[niveau] || 0;
+  while (iteration < maxIterations) {
+    iteration++;
 
-    if (current < target) {
-      const needed = target - current;
+    // Calculer les effectifs actuels
+    const currentCounts = {};
+    for (const [niveau, eleves] of Object.entries(classesState)) {
+      currentCounts[niveau] = eleves.length;
+    }
 
-      // Chercher une classe source qui a trop d'élèves
-      for (const [srcNiveau, srcEleves] of Object.entries(classesState)) {
-        if (srcNiveau === niveau) continue;
+    // Calculer la moyenne et trouver les classes les plus déséquilibrées
+    const niveaux = Object.keys(currentCounts);
+    const totalEleves = Object.values(currentCounts).reduce((sum, c) => sum + c, 0);
+    const moyenne = totalEleves / niveaux.length;
 
-        const srcTarget = targets[srcNiveau] || 25;
-        const srcCurrent = srcEleves.length;
+    // Trouver la classe la plus remplie et la classe la plus vide
+    let classeMax = null;
+    let effectifMax = 0;
+    let classeMin = null;
+    let effectifMin = Infinity;
 
-        if (srcCurrent > srcTarget) {
-          // Déplacer des élèves de srcNiveau vers niveau
-          const toMove = Math.min(needed, srcCurrent - srcTarget);
-
-          for (let i = 0; i < toMove; i++) {
-            if (srcEleves.length > 0) {
-              const eleve = srcEleves[srcEleves.length - 1];
-              moveEleveToClass_(classesState, eleve, srcNiveau, niveau);
-              logLine('INFO', '  Effectifs : Déplacé élève de ' + srcNiveau + ' vers ' + niveau);
-            }
-          }
-
-          currentCounts[niveau] = classesState[niveau].length;
-          currentCounts[srcNiveau] = classesState[srcNiveau].length;
-
-          if (currentCounts[niveau] >= target) {
-            break;
-          }
-        }
+    for (const [niveau, effectif] of Object.entries(currentCounts)) {
+      if (effectif > effectifMax) {
+        effectifMax = effectif;
+        classeMax = niveau;
       }
-
-      // Vérifier si on a atteint la cible
-      if (currentCounts[niveau] < target) {
-        warnings.push('Classe ' + niveau + ' : Effectif ' + currentCounts[niveau] + ' < cible ' + target);
+      if (effectif < effectifMin) {
+        effectifMin = effectif;
+        classeMin = niveau;
       }
     }
+
+    // Si la différence est <= 1, on a atteint un équilibre acceptable
+    const ecart = effectifMax - effectifMin;
+    if (ecart <= 1) {
+      logLine('INFO', `✅ Effectifs équilibrés : écart max = ${ecart} élève(s)`);
+      break;
+    }
+
+    // Déplacer UN élève LIBRE de la classe la plus remplie vers la classe la plus vide
+    const srcEleves = classesState[classeMax];
+    let eleveToMove = null;
+
+    for (let j = srcEleves.length - 1; j >= 0; j--) {
+      const eleve = srcEleves[j];
+      const codeA = eleve.ASSO || eleve.A || eleve['Code A'] || '';
+      const codeD = eleve.DISSO || eleve.D || eleve['Code D'] || '';
+
+      // ✅ Élève libre = pas de code ASSO ni DISSO
+      if ((!codeA || codeA === '') && (!codeD || codeD === '')) {
+        eleveToMove = eleve;
+        break;
+      }
+    }
+
+    if (eleveToMove) {
+      moveEleveToClass_(classesState, eleveToMove, classeMax, classeMin);
+      logLine('INFO', `  Équilibrage : Déplacé élève de ${classeMax} (${effectifMax}) vers ${classeMin} (${effectifMin})`);
+    } else {
+      // Aucun élève libre, arrêter
+      logLine('WARN', `⚠️ Impossible d'équilibrer davantage : tous les élèves de ${classeMax} ont ASSO/DISSO`);
+      break;
+    }
+  }
+
+  // Vérification finale
+  const finalCounts = {};
+  for (const [niveau, eleves] of Object.entries(classesState)) {
+    finalCounts[niveau] = eleves.length;
+  }
+
+  const effectifs = Object.values(finalCounts);
+  const min = Math.min(...effectifs);
+  const max = Math.max(...effectifs);
+  const ecartFinal = max - min;
+
+  logLine('INFO', `📊 Effectifs finaux : min=${min}, max=${max}, écart=${ecartFinal}`);
+
+  if (ecartFinal > 2) {
+    warnings.push(`⚠️ Déséquilibre persistant : écart de ${ecartFinal} élèves entre classes`);
   }
 }
 
@@ -1823,8 +1895,17 @@ function enforceParity_(classesState, tolerance, warnings) {
  * Trouve un élève d'un genre donné dans une liste
  */
 function findEleveByGenre_(eleves, genre) {
+  // ✅ CORRECTION : Ne PAS sélectionner un élève avec code ASSO ou DISSO
   for (const eleve of eleves) {
     const g = eleve.Genre || eleve.Sexe || '';
+    const codeA = eleve.ASSO || eleve.A || eleve['Code A'] || '';
+    const codeD = eleve.DISSO || eleve.D || eleve['Code D'] || '';
+
+    // Ignorer les élèves avec code ASSO ou DISSO
+    if ((codeA && codeA !== '') || (codeD && codeD !== '')) {
+      continue;
+    }
+
     if (genre === 'F' && (g === 'F' || g === 'Fille')) {
       return eleve;
     }
