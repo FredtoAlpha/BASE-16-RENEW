@@ -61,6 +61,45 @@ function legacy_runFullPipeline_PRIME() {
     logLine('INFO', '🚀 PRIME LEGACY - PIPELINE COMPLET');
     logLine('INFO', '='.repeat(80));
 
+    // ========== ÉTAPE 0 : AUTO-DIAGNOSTIC ==========
+    SpreadsheetApp.getActiveSpreadsheet().toast('Diagnostic pré-lancement...', 'Vérifications', -1);
+
+    if (typeof runLegacyDiagnostic === 'function') {
+      const diagnostic = runLegacyDiagnostic(false);
+
+      if (!diagnostic.ok && diagnostic.errors.length > 0) {
+        // Erreurs critiques détectées
+        ui.alert(
+          '❌ Diagnostic Échoué',
+          'Le diagnostic a détecté des erreurs critiques :\n\n' +
+          diagnostic.errors.join('\n\n') +
+          '\n\nCorrigez ces erreurs avant de relancer le pipeline.',
+          ui.ButtonSet.OK
+        );
+        return { ok: false, message: 'Diagnostic échoué' };
+      }
+
+      if (diagnostic.warnings.length > 0) {
+        // Avertissements détectés - demander confirmation
+        const warningResponse = ui.alert(
+          '⚠️ Avertissements Détectés',
+          'Le diagnostic a détecté des avertissements :\n\n' +
+          diagnostic.warnings.join('\n\n') +
+          '\n\nVoulez-vous continuer malgré tout ?',
+          ui.ButtonSet.YES_NO
+        );
+
+        if (warningResponse !== ui.Button.YES) {
+          logLine('INFO', '❌ Pipeline annulé suite aux avertissements du diagnostic');
+          return { ok: false, message: 'Annulé par l\'utilisateur (avertissements)' };
+        }
+      }
+
+      logLine('INFO', '✅ Diagnostic pré-lancement réussi');
+    } else {
+      logLine('WARN', '⚠️ runLegacyDiagnostic() non disponible, diagnostic ignoré');
+    }
+
     // ========== ÉTAPE 1 : CONSTRUIRE CONTEXTE LEGACY ==========
     SpreadsheetApp.getActiveSpreadsheet().toast('Détection onglets sources...', 'Initialisation', -1);
 
@@ -93,6 +132,8 @@ function legacy_runFullPipeline_PRIME() {
     logLine('INFO', '');
 
     if (typeof Phase1I_dispatchOptionsLV2_LEGACY === 'function') {
+      // ✅ OPTIMISATION : Passer le contexte partagé avec flag useSharedContext
+      ctx._useSharedContext = true;
       const p1Result = Phase1I_dispatchOptionsLV2_LEGACY(ctx);
       logLine('INFO', '✅ Phase 1 terminée : ' + JSON.stringify(p1Result.counts || {}));
     } else {
@@ -104,6 +145,7 @@ function legacy_runFullPipeline_PRIME() {
     logLine('INFO', '');
 
     if (typeof Phase2I_applyDissoAsso_LEGACY === 'function') {
+      // ✅ OPTIMISATION : Réutiliser le même contexte
       const p2Result = Phase2I_applyDissoAsso_LEGACY(ctx);
       logLine('INFO', '✅ Phase 2 terminée : ASSO=' + (p2Result.asso || 0) + ', DISSO=' + (p2Result.disso || 0));
     } else {
@@ -115,6 +157,7 @@ function legacy_runFullPipeline_PRIME() {
     logLine('INFO', '');
 
     if (typeof Phase3I_completeAndParity_LEGACY === 'function') {
+      // ✅ OPTIMISATION : Réutiliser le même contexte
       const p3Result = Phase3I_completeAndParity_LEGACY(ctx);
       logLine('INFO', '✅ Phase 3 terminée : ' + (p3Result.message || 'Effectifs équilibrés'));
     } else {
@@ -126,6 +169,7 @@ function legacy_runFullPipeline_PRIME() {
     logLine('INFO', '');
 
     if (typeof Phase4_balanceScoresSwaps_LEGACY === 'function') {
+      // ✅ OPTIMISATION : Réutiliser le même contexte
       const p4Result = Phase4_balanceScoresSwaps_LEGACY(ctx);
       logLine('INFO', '✅ Phase 4 terminée : ' + (p4Result.swapsApplied || 0) + ' swaps appliqués');
     } else {
@@ -371,16 +415,16 @@ function legacy_runPhase4_PRIME() {
 // ===================================================================
 
 /**
- * Affiche le statut actuel du pipeline LEGACY
+ * Affiche le statut actuel du pipeline LEGACY dans une sidebar HTML
  */
 function legacy_showPipelineStatus() {
-  const ui = SpreadsheetApp.getUi();
-
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
 
-    // Détecter onglets sources
+    // ========== COLLECTER LES DONNÉES ==========
     const allSheets = ss.getSheets();
+
+    // Détecter onglets sources
     const sourceSheets = allSheets.filter(function(s) {
       return /^(ECOLE\d+|[3-6]°\d+)$/.test(s.getName());
     });
@@ -390,22 +434,74 @@ function legacy_showPipelineStatus() {
       return s.getName().endsWith('TEST');
     });
 
-    ui.alert(
-      '📊 Statut PRIME LEGACY',
-      'ONGLETS SOURCES (' + sourceSheets.length + ') :\n' +
-      sourceSheets.map(function(s) { return '• ' + s.getName(); }).join('\n') +
-      '\n\nONGLETS TEST (' + testSheets.length + ') :\n' +
-      (testSheets.length > 0
-        ? testSheets.map(function(s) { return '• ' + s.getName(); }).join('\n')
-        : '• Aucun onglet TEST (lancer le pipeline)') +
-      '\n\n' +
-      (testSheets.length === 0
-        ? '🚀 Prêt à lancer le pipeline !'
-        : '✅ Pipeline déjà exécuté'),
-      ui.ButtonSet.OK
-    );
+    // Compter les élèves
+    const sources = sourceSheets.map(function(s) {
+      return {
+        name: s.getName(),
+        count: Math.max(0, s.getLastRow() - 1)
+      };
+    });
+
+    const tests = testSheets.map(function(s) {
+      return {
+        name: s.getName(),
+        count: Math.max(0, s.getLastRow() - 1)
+      };
+    });
+
+    const totalSourceEleves = sources.reduce(function(sum, s) { return sum + s.count; }, 0);
+    const totalTestEleves = tests.reduce(function(sum, s) { return sum + s.count; }, 0);
+
+    // Récupérer les stats de logs
+    const logsStats = typeof getLegacyLogsStats === 'function'
+      ? getLegacyLogsStats()
+      : { total: 0, INFO: 0, WARN: 0, ERROR: 0, SUCCESS: 0 };
+
+    // ========== PRÉPARER LES DONNÉES POUR LA SIDEBAR ==========
+    const data = {
+      sources: sources,
+      tests: tests,
+      totalSourceEleves: totalSourceEleves,
+      totalTestEleves: totalTestEleves,
+      logsStats: logsStats
+    };
+
+    // ========== CRÉER LA SIDEBAR ==========
+    const template = HtmlService.createTemplateFromFile('LEGACY_StatusSidebar');
+    template.data = data;
+
+    const html = template.evaluate()
+      .setTitle('Statut PRIME LEGACY')
+      .setWidth(320);
+
+    SpreadsheetApp.getUi().showSidebar(html);
 
   } catch (e) {
-    ui.alert('❌ Erreur', e.toString(), ui.ButtonSet.OK);
+    // Fallback : si erreur, afficher modale simple
+    const ui = SpreadsheetApp.getUi();
+    ui.alert('❌ Erreur Sidebar', e.toString(), ui.ButtonSet.OK);
+    Logger.log('Erreur legacy_showPipelineStatus : ' + e.toString());
+  }
+}
+
+/**
+ * Active un onglet spécifique (appelé depuis la sidebar)
+ * @param {string} sheetName - Nom de l'onglet à activer
+ */
+function legacy_activateSheet(sheetName) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(sheetName);
+
+    if (sheet) {
+      ss.setActiveSheet(sheet);
+      return true;
+    }
+
+    return false;
+
+  } catch (e) {
+    Logger.log('Erreur legacy_activateSheet : ' + e.toString());
+    return false;
   }
 }

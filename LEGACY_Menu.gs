@@ -21,6 +21,7 @@ function createLegacyMenu_PRIME() {
 
   ui.createMenu('⚙️ PRIME LEGACY')
     .addItem('📊 Statut Pipeline', 'legacy_showPipelineStatus')
+    .addItem('🔍 Diagnostic Pré-Lancement', 'legacy_runDiagnostic_Menu')
     .addSeparator()
     .addItem('🚀 Pipeline Complet (Sources → TEST)', 'legacy_runFullPipeline_PRIME')
     .addSeparator()
@@ -32,6 +33,12 @@ function createLegacyMenu_PRIME() {
     .addSeparator()
     .addItem('📋 Voir Classes Sources', 'legacy_viewSourceClasses_PRIME')
     .addItem('📊 Voir Résultats TEST', 'legacy_viewTestResults_PRIME')
+    .addSeparator()
+    .addSubMenu(ui.createMenu('📝 Logs')
+      .addItem('📖 Ouvrir Logs', 'openLegacyLogsSheet')
+      .addItem('📋 Afficher Derniers Logs', 'showRecentLegacyLogs')
+      .addItem('📤 Exporter Logs', 'exportLegacyLogsToFile')
+      .addItem('🗑️ Effacer Logs', 'clearLegacyLogs'))
     .addToUi();
 
   logLine('INFO', '✅ Menu PRIME LEGACY créé');
