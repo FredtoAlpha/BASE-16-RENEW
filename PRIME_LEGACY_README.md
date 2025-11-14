@@ -47,20 +47,20 @@ Créer un système LEGACY propre qui :
    - Répartition Options & LV2 selon quotas
    - Logique OPTIMUM PRIME complète
 
-5. **LEGACY_Phase2_DissoAsso.gs** (30 lignes) ⚠️ STUB
+5. **LEGACY_Phase2_DissoAsso.gs** (250 lignes) ✅ IMPLÉMENTÉ
    - Basé sur : `Phase2I_applyDissoAsso_BASEOPTI_V3`
    - Codes ASSO (regrouper) et DISSO (séparer)
-   - **À IMPLÉMENTER** : Logique complète OPTIMUM PRIME
+   - Logique complète adaptée au contexte multi-onglets
 
-6. **LEGACY_Phase3_Parite.gs** (30 lignes) ⚠️ STUB
+6. **LEGACY_Phase3_Parite.gs** (130 lignes) ✅ IMPLÉMENTÉ
    - Basé sur : `Phase3I_completeAndParity_BASEOPTI_V3`
-   - Effectifs et parité F/M
-   - **À IMPLÉMENTER** : Module parité adaptative
+   - Placement des élèves restants et équilibrage parité F/M via swaps
+   - Logique fonctionnelle mais basique
 
-7. **LEGACY_Phase4_Optimisation.gs** (40 lignes) ⚠️ STUB
+7. **LEGACY_Phase4_Optimisation.gs** (200 lignes) ✅ IMPLÉMENTÉ
    - Basé sur : `Phase4_balanceScoresSwaps_BASEOPTI_V3`
-   - Algorithme OPTIMUM PRIME (Moteurs Silencieux + Ancre d'Amarrage)
-   - **À IMPLÉMENTER** : Score composite, swaps intelligents
+   - Algorithme de swaps fonctionnel pour équilibrer parité et scores
+   - **LIMITATION** : Utilise une méthode de variance des moyennes, non optimale
 
 #### Interface (1 fichier)
 8. **LEGACY_Menu.gs** (140 lignes) ✅ IMPLÉMENTÉ
@@ -100,42 +100,41 @@ Créer un système LEGACY propre qui :
 | 6°1 | 5°1 | 24 | ITA=5 |
 | 6°2 | 5°2 | 24 | CHAV=8 |
 
-## 🔧 État Actuel (MVP)
+## 🔧 État Actuel
 
 ### ✅ Fonctionnel
 
-- ✅ Détection automatique onglets sources
-- ✅ Lecture config _STRUCTURE (quotas, effectifs, mapping)
-- ✅ Création onglets TEST avec formatage
-- ✅ **Phase 1 OPTIMUM PRIME** : Répartition Options/LV2
-- ✅ Menu Google Sheets complet
-- ✅ Isolation OPTI/LEGACY garantie
+- ✅ **Pipeline Complet (Phases 1-4)** : Le pipeline est entièrement fonctionnel, de la création des onglets à l'optimisation finale.
+  - ✅ **Phase 1** : Répartition Options/LV2.
+  - ✅ **Phase 2** : Gestion des codes ASSO/DISSO.
+  - ✅ **Phase 3** : Placement des élèves restants et équilibrage de la parité.
+  - ✅ **Phase 4** : Algorithme d'optimisation par swaps.
+- ✅ Détection automatique onglets sources et lecture de la configuration `_STRUCTURE`.
+- ✅ Création et formatage des onglets de destination `TEST`.
+- ✅ Menu Google Sheets complet et isolation OPTI/LEGACY garantie.
 
-### ⚠️ À Implémenter
+### ⚠️ Limitations Actuelles
 
-- ⚠️ **Phase 2** : ASSO/DISSO (helpers BASEOPTI V3 existants)
-- ⚠️ **Phase 3** : Parité adaptative (module existant)
-- ⚠️ **Phase 4** : OPTIMUM PRIME complet (algorithme JULES-VERNE-NAUTILUS)
-- ⚠️ Outils Phase 0 : GenererID, Consolidation, ListesDeroulantes
+- ⚠️ **Algorithme Phase 4 non optimal** : L'équilibrage des scores académiques se base sur la **variance des moyennes**, ce qui tend à lisser les classes mais ne garantit pas une distribution hétérogène des profils (1, 2, 3, 4) au sein de chaque classe. C'est le point d'amélioration prioritaire.
+- ⚠️ **Recherche de swaps peu efficace** : La recherche des échanges d'élèves se fait de manière semi-aléatoire, ce qui peut être lent et ne garantit pas de trouver le meilleur optimum.
+- ⚠️ **Parité décorrélée** : La parité est gérée dans une phase distincte (Phase 3), ce qui empêche des arbitrages fins avec les critères académiques lors de l'optimisation principale (Phase 4).
+- ⚠️ **Outils Phase 0 manquants** : Les outils de préparation des données (GenererID, Consolidation) ne sont pas encore intégrés au pipeline LEGACY.
 
 ## 🚀 Prochaines Étapes
 
-### Priorité 1 : Phases 2-4 Complètes
+### Priorité 1 : Rendre le Pipeline Intelligent
 
-1. **Phase 2** (ASSO/DISSO)
-   - Adapter `canPlaceInClass_V3()` pour TEST
-   - Adapter `findClassWithoutCodeD_V3()` pour TEST
-   - Logique regroupement/séparation
+1.  **Refondre le Score d'Harmonie (Phase 4)**
+    *   **Objectif** : Remplacer le calcul de variance par un calcul de **distance de distribution**. Le score doit mesurer l'écart entre la distribution des notes (ex: 20% de '1', 30% de '2'...) dans une classe et la distribution globale.
+    *   **Bénéfice** : Créer des classes véritablement hétérogènes qui reflètent la diversité du vivier global.
 
-2. **Phase 3** (Parité)
-   - Intégrer `Phase3I_completeAndParity_PariteAdaptive_V3`
-   - Adapter pour onglets TEST multiples
+2.  **Intégrer la Parité dans le Score Composite (Phase 4)**
+    *   **Objectif** : Supprimer la `Phase 3`. La parité F/M doit devenir une composante du score global de la Phase 4, avec une pondération configurable.
+    *   **Bénéfice** : Permettre des arbitrages intelligents entre l'équilibre de parité et l'équilibre académique.
 
-3. **Phase 4** (OPTIMUM PRIME)
-   - Intégrer algorithme complet JULES-VERNE-NAUTILUS
-   - Moteurs Silencieux (recherche ciblée)
-   - Ancre d'Amarrage (stabilité anti-oscillations)
-   - Score composite (harmonie + parité)
+3.  **Implémenter les "Moteurs Silencieux" (Phase 4)**
+    *   **Objectif** : Remplacer la recherche de swaps aléatoires par une recherche ciblée. Identifier les élèves qui "tirent" le score d'une classe vers le bas et chercher activement des échanges pour eux.
+    *   **Bénéfice** : Convergence plus rapide et solution finale de meilleure qualité.
 
 ### Priorité 2 : Outils Phase 0
 
@@ -149,10 +148,10 @@ Créer un système LEGACY propre qui :
 | Métrique | Valeur |
 |----------|--------|
 | **Fichiers créés** | 8 |
-| **Lignes de code** | 1820 |
-| **Phases implémentées** | 1/4 (Phase 1 ✅) |
-| **Couverture fonctionnelle** | 40% (MVP) |
-| **Doublons supprimés** | 1 (Phases_BASEOPTI.gs) |
+| **Lignes de code** | ~2200 |
+| **Phases implémentées** | 4/4 (Implémentation de base ✅) |
+| **Couverture fonctionnelle** | 100% (Base fonctionnelle) |
+| **Qualité algorithmique** | 50% (Amélioration requise) |
 
 ## 🎨 Design Patterns
 
@@ -206,18 +205,22 @@ const testName = sourceToDestMapping[sourceName] + 'TEST'; // "6°1TEST"
 
 ## 🎯 Roadmap
 
-### v1.0 (MVP) ✅
+### v1.0 (Base Fonctionnelle) ✅
 - [x] Core Pipeline
 - [x] Context & Init
-- [x] Phase 1 OPTIMUM PRIME
+- [x] Phase 1 (Options/LV2) implémentée
+- [x] Phase 2 (ASSO/DISSO) implémentée
+- [x] Phase 3 (Parité basique) implémentée
+- [x] Phase 4 (Optimisation basique) implémentée
 - [x] Menu Google Sheets
 
-### v1.1
-- [ ] Phase 2 OPTIMUM PRIME complète
-- [ ] Phase 3 Parité adaptative
-- [ ] Phase 4 OPTIMUM PRIME complète
+### v1.1 (Pipeline Intelligent)
+- [ ] **Phase 4** : Refonte du score d'harmonie (distribution)
+- [ ] **Phase 4** : Intégration de la parité au score composite
+- [ ] **Phase 4** : Implémentation des swaps intelligents (Moteurs Silencieux)
+- [ ] **Suppression** de la Phase 3 (redondante)
 
-### v1.2
+### v1.2 (Outils & Finalisation)
 - [ ] Outils Phase 0 (GenererID, Consolidation, etc.)
 - [ ] Interface UI LEGACY
 - [ ] Tests unitaires
