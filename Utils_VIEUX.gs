@@ -96,18 +96,17 @@ function getSourceSheets() {
     }
   }
 
-  /* --- 2) Motifs de classes sources -------------------------------- */
-  const classicPattern = /^[3-6]°\d+$/;           // Format classique: 3°1, 6°2, etc.
-  const genericPattern = /^[A-Za-z0-9_-]+°\d+$/;  // Format générique: GAMARRA°4, ECOLE°1, etc.
+  /* --- 2) Motif pour classes sources ------------------------------- */
+  // Tous les formats avec °: 1°1, 6°1, 5°3, 3°4, GAMARRA°7, ECOLE°1, etc.
+  const sourcePattern = /^[A-Za-z0-9_-]+°\d+$/;
 
   /* --- 3) Filtrer les feuilles -------------------------------------- */
   return allSheets.filter(sh => {
     const name = sh.getName();
-    const isClassic  = classicPattern.test(name);
-    const isGeneric  = genericPattern.test(name);  // Nouveau: support formats personnalisés
+    const hasCorrectFormat = sourcePattern.test(name);
     const inStructure = structNames.has(name);
-    const isTestDef   = /TEST|DEF/i.test(name);
-    return (isClassic || isGeneric || inStructure) && !isTestDef;
+    const isTestDef = /TEST|DEF/i.test(name);
+    return (hasCorrectFormat || inStructure) && !isTestDef;
   });
 }
 
