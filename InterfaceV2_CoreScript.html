@@ -1,4 +1,19 @@
 <script>
+(function() {
+  'use strict';
+
+  // ═══════════════════════════════════════════════════════════════════
+  // 🛡️ DOM ENVIRONMENT GUARD
+  // ═══════════════════════════════════════════════════════════════════
+  // Protection contre l'exécution de code DOM côté serveur Apps Script
+  // Si typeof document === 'undefined', on est côté serveur → sortir
+  if (typeof document === 'undefined') {
+    console.warn('[CoreScript] Skipping client-side code in server context');
+    return;
+  }
+  // À partir d'ici, le code s'exécute uniquement côté client (navigateur)
+  // ═══════════════════════════════════════════════════════════════════
+
 // Scripts principaux extraits de InterfaceV2.html pour améliorer la lisibilité.
 // =======================================================
 // FONCTIONS UTILITAIRES GLOBALES (accessibles partout)
@@ -9588,4 +9603,6 @@ if (!document.getElementById('fluid-animations-style')) {
 // ========== ANCIENNES VERSIONS SUPPRIMÉES - REMPLACÉES PAR LA VERSION PROPRE ==========
 // Toutes les anciennes versions de updateStatsPanel et les protections excessives ont été supprimées
 // et remplacées par la version propre ajoutée à la fin du fichier
+
+})(); // Fin du DOM Environment Guard IIFE
 </script>
