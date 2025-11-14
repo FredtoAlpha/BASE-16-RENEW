@@ -38,11 +38,10 @@ function legacy_runFullPipeline_PRIME() {
     'Cette action va :\n\n' +
     '1. Détecter automatiquement les onglets sources (°1, °2, etc.)\n' +
     '2. Créer les onglets TEST\n' +
-    '3. Lancer les 4 phases OPTIMUM PRIME :\n' +
+    '3. Lancer les 3 phases optimisées du pipeline :\n' +
     '   • Phase 1 : Options & LV2\n' +
     '   • Phase 2 : ASSO/DISSO\n' +
-    '   • Phase 3 : Effectifs & Parité\n' +
-    '   • Phase 4 : Équilibrage Scores (OPTIMUM PRIME)\n\n' +
+    '   • Phase 3 : Équilibrage final (Effectifs, Parité & Scores)\n\n' +
     'Durée estimée : 2-5 minutes\n\n' +
     'Continuer ?',
     ui.ButtonSet.YES_NO
@@ -89,7 +88,7 @@ function legacy_runFullPipeline_PRIME() {
     }
 
     // ========== ÉTAPE 3 : PHASE 1 - OPTIONS & LV2 ==========
-    SpreadsheetApp.getActiveSpreadsheet().toast('Phase 1/4...', 'Options & LV2', -1);
+    SpreadsheetApp.getActiveSpreadsheet().toast('Phase 1/3...', 'Options & LV2', -1);
     logLine('INFO', '');
 
     if (typeof Phase1I_dispatchOptionsLV2_LEGACY === 'function') {
@@ -100,7 +99,7 @@ function legacy_runFullPipeline_PRIME() {
     }
 
     // ========== ÉTAPE 4 : PHASE 2 - ASSO/DISSO ==========
-    SpreadsheetApp.getActiveSpreadsheet().toast('Phase 2/4...', 'ASSO/DISSO', -1);
+    SpreadsheetApp.getActiveSpreadsheet().toast('Phase 2/3...', 'ASSO/DISSO', -1);
     logLine('INFO', '');
 
     if (typeof Phase2I_applyDissoAsso_LEGACY === 'function') {
@@ -110,29 +109,18 @@ function legacy_runFullPipeline_PRIME() {
       throw new Error('❌ Phase2I_applyDissoAsso_LEGACY() non trouvée ! Vérifier LEGACY_Phase2_DissoAsso.gs');
     }
 
-    // ========== ÉTAPE 5 : PHASE 3 - EFFECTIFS & PARITÉ ==========
-    SpreadsheetApp.getActiveSpreadsheet().toast('Phase 3/4...', 'Effectifs & Parité', -1);
-    logLine('INFO', '');
-
-    if (typeof Phase3I_completeAndParity_LEGACY === 'function') {
-      const p3Result = Phase3I_completeAndParity_LEGACY(ctx);
-      logLine('INFO', '✅ Phase 3 terminée : ' + (p3Result.message || 'Effectifs équilibrés'));
-    } else {
-      throw new Error('❌ Phase3I_completeAndParity_LEGACY() non trouvée ! Vérifier LEGACY_Phase3_Parite.gs');
-    }
-
-    // ========== ÉTAPE 6 : PHASE 4 - OPTIMISATION (OPTIMUM PRIME) ==========
-    SpreadsheetApp.getActiveSpreadsheet().toast('Phase 4/4...', 'Équilibrage Scores (OPTIMUM PRIME)', -1);
+    // ========== ÉTAPE 5 : PHASE 3 - OPTIMISATION FINALE (OPTIMUM PRIME) ==========
+    SpreadsheetApp.getActiveSpreadsheet().toast('Phase 3/3...', 'Équilibrage Scores (OPTIMUM PRIME)', -1);
     logLine('INFO', '');
 
     if (typeof Phase4_balanceScoresSwaps_LEGACY === 'function') {
       const p4Result = Phase4_balanceScoresSwaps_LEGACY(ctx);
-      logLine('INFO', '✅ Phase 4 terminée : ' + (p4Result.swapsApplied || 0) + ' swaps appliqués');
+      logLine('INFO', '✅ Phase 3 (Optimisation) terminée : ' + (p4Result.swapsApplied || 0) + ' swaps appliqués');
     } else {
       throw new Error('❌ Phase4_balanceScoresSwaps_LEGACY() non trouvée ! Vérifier LEGACY_Phase4_Optimisation.gs');
     }
 
-    // ========== ÉTAPE 7 : FINALISATION ==========
+    // ========== ÉTAPE 6 : FINALISATION ==========
     const duration = ((new Date() - startTime) / 1000).toFixed(1);
 
     // Compter les onglets TEST créés
@@ -282,49 +270,7 @@ function legacy_runPhase2_PRIME() {
 }
 
 /**
- * Lance Phase 3 LEGACY - Effectifs & Parité
- */
-function legacy_runPhase3_PRIME() {
-  const ui = SpreadsheetApp.getUi();
-
-  try {
-    SpreadsheetApp.getActiveSpreadsheet().toast('⚖️ Phase 3 LEGACY en cours...', 'Effectifs & Parité', -1);
-
-    logLine('INFO', '⚖️ PHASE 3 LEGACY - Effectifs & Parité');
-
-    const ctx = typeof makeCtxFromSourceSheets_LEGACY === 'function'
-      ? makeCtxFromSourceSheets_LEGACY()
-      : null;
-
-    if (!ctx) throw new Error('makeCtxFromSourceSheets_LEGACY() non trouvée');
-
-    if (typeof Phase3I_completeAndParity_LEGACY === 'function') {
-      const result = Phase3I_completeAndParity_LEGACY(ctx);
-
-      ui.alert(
-        '✅ Phase 3 LEGACY Terminée',
-        'Effectifs & Parité équilibrés avec succès\n\n' +
-        (result.message || 'Tous les élèves ont été placés'),
-        ui.ButtonSet.OK
-      );
-
-      return result;
-    } else {
-      throw new Error('Phase3I_completeAndParity_LEGACY() non trouvée');
-    }
-
-  } catch (e) {
-    logLine('ERROR', '❌ Erreur Phase 3 LEGACY : ' + e.toString());
-    ui.alert('❌ Erreur Phase 3 LEGACY', e.toString(), ui.ButtonSet.OK);
-    return { ok: false, message: e.toString() };
-
-  } finally {
-    SpreadsheetApp.getActiveSpreadsheet().toast('', '', 1);
-  }
-}
-
-/**
- * Lance Phase 4 LEGACY - Équilibrage Scores (OPTIMUM PRIME)
+ * Lance la Phase 3 (Optimisation Finale) LEGACY - Équilibrage Scores (OPTIMUM PRIME)
  */
 function legacy_runPhase4_PRIME() {
   const ui = SpreadsheetApp.getUi();
