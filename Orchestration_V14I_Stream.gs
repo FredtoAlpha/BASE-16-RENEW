@@ -139,6 +139,14 @@ function writeCacheHeaders_(ctx, targetSheet, cacheName) {
     logLine('INFO', '    📋 En-têtes copiés de ' + srcName + ' vers ' + cacheName);
   } else {
     logLine('WARN', '⚠️ Impossible de trouver l\'onglet source pour ' + cacheName + ' (cherché: ' + srcName + ')');
+
+    // ✅ Créer des en-têtes par défaut
+    const defaultHeaders = ['NOM', 'PRENOM', 'SEXE', 'LV2', 'OPT', 'COM', 'TRA', 'PART', 'ABS', 'CODE_ASSO', 'CODE_DISSO', '_CLASS_ASSIGNED'];
+    targetSheet.getRange(1, 1, 1, defaultHeaders.length).setValues([defaultHeaders]);
+    targetSheet.getRange(1, 1, 1, defaultHeaders.length)
+      .setFontWeight('bold')
+      .setBackground('#C6E0B4');
+    logLine('INFO', '    ✨ En-têtes par défaut créés pour ' + cacheName);
   }
 }
 

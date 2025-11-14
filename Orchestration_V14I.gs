@@ -63,17 +63,33 @@ function makeCtxFromSourceSheets_() {
   // ✅ Lire le mapping CLASSE_ORIGINE → CLASSE_DEST depuis _STRUCTURE
   const sourceToDestMapping = readSourceToDestMapping_();
 
-  // ✅ CORRECTION : Extraire les destinations UNIQUES (éviter les doublons)
+  // ✅ CORRECTION : Extraire les destinations UNIQUES depuis le MAPPING (pas seulement les sources existantes)
   // Plusieurs sources peuvent mapper vers la même destination (ex: PANASS°5, BUISSON°6, ALBEXT°7 → 6°5)
   const uniqueDestinations = [];
   const seenDest = {};
   const destToSourceMapping = {}; // Mapping inverse pour copier les en-têtes
+  const sourceSheetSet = new Set(sourceSheets); // Pour vérifier l'existence rapide
 
+  // D'abord, traiter TOUS les mappings depuis _STRUCTURE
+  for (const [sourceName, dest] of Object.entries(sourceToDestMapping)) {
+    if (dest && !seenDest[dest]) {
+      uniqueDestinations.push(dest);
+      seenDest[dest] = true;
+
+      // Trouver la première source qui EXISTE physiquement pour cette destination
+      if (!destToSourceMapping[dest]) {
+        if (sourceSheetSet.has(sourceName)) {
+          destToSourceMapping[dest] = sourceName;
+        }
+      }
+    }
+  }
+
+  // Ensuite, traiter les sources détectées qui n'ont PAS de mapping
   for (const sourceName of sourceSheets) {
-    let dest = sourceToDestMapping[sourceName];
-
-    if (!dest) {
-      // Fallback si pas de mapping
+    if (!sourceToDestMapping[sourceName]) {
+      // Pas de mapping → fallback
+      let dest;
       const match = sourceName.match(/([3-6]°\d+)/);
       if (match) {
         dest = match[1];
@@ -83,13 +99,25 @@ function makeCtxFromSourceSheets_() {
           dest = '6°' + matchEcole[1];
         }
       }
-    }
 
-    if (dest) {
-      if (!seenDest[dest]) {
+      if (dest && !seenDest[dest]) {
         uniqueDestinations.push(dest);
         seenDest[dest] = true;
-        destToSourceMapping[dest] = sourceName; // Première source pour cette dest
+        destToSourceMapping[dest] = sourceName;
+      }
+    }
+  }
+
+  // Pour les destinations sans source existante, utiliser la première source du mapping
+  for (const dest of uniqueDestinations) {
+    if (!destToSourceMapping[dest]) {
+      // Trouver n'importe quelle source qui mappe vers cette destination
+      for (const [src, d] of Object.entries(sourceToDestMapping)) {
+        if (d === dest) {
+          destToSourceMapping[dest] = src;
+          logLine('WARN', `⚠️ Onglet ${src} introuvable, utilisé comme référence pour ${dest}TEST`);
+          break;
+        }
       }
     }
   }
