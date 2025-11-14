@@ -1717,9 +1717,28 @@ function reachHeadcountTargets_(classesState, targets, warnings) {
 
           for (let i = 0; i < toMove; i++) {
             if (srcEleves.length > 0) {
-              const eleve = srcEleves[srcEleves.length - 1];
-              moveEleveToClass_(classesState, eleve, srcNiveau, niveau);
-              logLine('INFO', '  Effectifs : Déplacé élève de ' + srcNiveau + ' vers ' + niveau);
+              // ✅ CORRECTION : Ne PAS déplacer un élève avec code ASSO
+              // Chercher un élève sans code ASSO à déplacer
+              let eleveToMove = null;
+
+              for (let j = srcEleves.length - 1; j >= 0; j--) {
+                const eleve = srcEleves[j];
+                const codeA = eleve.ASSO || eleve.A || eleve['Code A'] || '';
+
+                if (!codeA || codeA === '') {
+                  eleveToMove = eleve;
+                  break;
+                }
+              }
+
+              if (eleveToMove) {
+                moveEleveToClass_(classesState, eleveToMove, srcNiveau, niveau);
+                logLine('INFO', '  Effectifs : Déplacé élève de ' + srcNiveau + ' vers ' + niveau);
+              } else {
+                // Aucun élève libre (tous ont ASSO), arrêter pour cette classe source
+                logLine('WARN', '⚠️ Impossible de déplacer depuis ' + srcNiveau + ' : tous les élèves ont un code ASSO');
+                break;
+              }
             }
           }
 
