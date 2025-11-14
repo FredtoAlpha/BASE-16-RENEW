@@ -1724,8 +1724,10 @@ function reachHeadcountTargets_(classesState, targets, warnings) {
               for (let j = srcEleves.length - 1; j >= 0; j--) {
                 const eleve = srcEleves[j];
                 const codeA = eleve.ASSO || eleve.A || eleve['Code A'] || '';
+                const codeD = eleve.DISSO || eleve.D || eleve['Code D'] || '';
 
-                if (!codeA || codeA === '') {
+                // ✅ Élève libre = pas de code ASSO ni DISSO
+                if ((!codeA || codeA === '') && (!codeD || codeD === '')) {
                   eleveToMove = eleve;
                   break;
                 }
@@ -1736,7 +1738,7 @@ function reachHeadcountTargets_(classesState, targets, warnings) {
                 logLine('INFO', '  Effectifs : Déplacé élève de ' + srcNiveau + ' vers ' + niveau);
               } else {
                 // Aucun élève libre (tous ont ASSO), arrêter pour cette classe source
-                logLine('WARN', '⚠️ Impossible de déplacer depuis ' + srcNiveau + ' : tous les élèves ont un code ASSO');
+                logLine('WARN', '⚠️ Impossible de déplacer depuis ' + srcNiveau + ' : tous les élèves ont un code ASSO ou DISSO');
                 break;
               }
             }
@@ -1870,13 +1872,14 @@ function enforceParity_(classesState, tolerance, warnings) {
  * Trouve un élève d'un genre donné dans une liste
  */
 function findEleveByGenre_(eleves, genre) {
-  // ✅ CORRECTION : Ne PAS sélectionner un élève avec code ASSO
+  // ✅ CORRECTION : Ne PAS sélectionner un élève avec code ASSO ou DISSO
   for (const eleve of eleves) {
     const g = eleve.Genre || eleve.Sexe || '';
     const codeA = eleve.ASSO || eleve.A || eleve['Code A'] || '';
+    const codeD = eleve.DISSO || eleve.D || eleve['Code D'] || '';
 
-    // Ignorer les élèves avec code ASSO
-    if (codeA && codeA !== '') {
+    // Ignorer les élèves avec code ASSO ou DISSO
+    if ((codeA && codeA !== '') || (codeD && codeD !== '')) {
       continue;
     }
 
