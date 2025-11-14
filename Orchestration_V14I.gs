@@ -328,6 +328,13 @@ function runOptimizationV14FullI(options) {
     // ✅ AUDIT FINAL : Vérifier conformité CACHE vs STRUCTURE
     const cacheAudit = auditCacheAgainstStructure_(ctx);
 
+    // ✅ FINALISATION : Calcul moyennes et mise en forme onglets TEST
+    try {
+      finalizeTestSheets_(ctx);
+    } catch (e) {
+      logLine('WARN', '⚠️ Erreur lors de la finalisation des onglets TEST : ' + e.message);
+    }
+
     // ✅ Réponse 100% sérialisable et compatible avec l'UI
     const warningsOut = (collectWarnings_(phasesOut) || []).map(function(w) {
       return String(w);
@@ -1688,76 +1695,92 @@ function placeRemainingStudents_(classesState, targets, warnings) {
 }
 
 /**
- * Complète les effectifs jusqu'aux cibles
+ * Complète les effectifs et ÉQUILIBRE les classes
+ * ✅ NOUVELLE LOGIQUE : Équilibrage réel au lieu d'atteindre des cibles impossibles
  */
 function reachHeadcountTargets_(classesState, targets, warnings) {
-  // Calculer les effectifs actuels
-  const currentCounts = {};
-  for (const [niveau, eleves] of Object.entries(classesState)) {
-    currentCounts[niveau] = eleves.length;
-  }
+  const maxIterations = 50;
+  let iteration = 0;
 
-  // Pour chaque classe sous la cible, essayer d'équilibrer
-  for (const [niveau, target] of Object.entries(targets)) {
-    const current = currentCounts[niveau] || 0;
+  while (iteration < maxIterations) {
+    iteration++;
 
-    if (current < target) {
-      const needed = target - current;
+    // Calculer les effectifs actuels
+    const currentCounts = {};
+    for (const [niveau, eleves] of Object.entries(classesState)) {
+      currentCounts[niveau] = eleves.length;
+    }
 
-      // Chercher une classe source qui a trop d'élèves
-      for (const [srcNiveau, srcEleves] of Object.entries(classesState)) {
-        if (srcNiveau === niveau) continue;
+    // Calculer la moyenne et trouver les classes les plus déséquilibrées
+    const niveaux = Object.keys(currentCounts);
+    const totalEleves = Object.values(currentCounts).reduce((sum, c) => sum + c, 0);
+    const moyenne = totalEleves / niveaux.length;
 
-        const srcTarget = targets[srcNiveau] || 25;
-        const srcCurrent = srcEleves.length;
+    // Trouver la classe la plus remplie et la classe la plus vide
+    let classeMax = null;
+    let effectifMax = 0;
+    let classeMin = null;
+    let effectifMin = Infinity;
 
-        if (srcCurrent > srcTarget) {
-          // Déplacer des élèves de srcNiveau vers niveau
-          const toMove = Math.min(needed, srcCurrent - srcTarget);
-
-          for (let i = 0; i < toMove; i++) {
-            if (srcEleves.length > 0) {
-              // ✅ CORRECTION : Ne PAS déplacer un élève avec code ASSO
-              // Chercher un élève sans code ASSO à déplacer
-              let eleveToMove = null;
-
-              for (let j = srcEleves.length - 1; j >= 0; j--) {
-                const eleve = srcEleves[j];
-                const codeA = eleve.ASSO || eleve.A || eleve['Code A'] || '';
-                const codeD = eleve.DISSO || eleve.D || eleve['Code D'] || '';
-
-                // ✅ Élève libre = pas de code ASSO ni DISSO
-                if ((!codeA || codeA === '') && (!codeD || codeD === '')) {
-                  eleveToMove = eleve;
-                  break;
-                }
-              }
-
-              if (eleveToMove) {
-                moveEleveToClass_(classesState, eleveToMove, srcNiveau, niveau);
-                logLine('INFO', '  Effectifs : Déplacé élève de ' + srcNiveau + ' vers ' + niveau);
-              } else {
-                // Aucun élève libre (tous ont ASSO), arrêter pour cette classe source
-                logLine('WARN', '⚠️ Impossible de déplacer depuis ' + srcNiveau + ' : tous les élèves ont un code ASSO ou DISSO');
-                break;
-              }
-            }
-          }
-
-          currentCounts[niveau] = classesState[niveau].length;
-          currentCounts[srcNiveau] = classesState[srcNiveau].length;
-
-          if (currentCounts[niveau] >= target) {
-            break;
-          }
-        }
+    for (const [niveau, effectif] of Object.entries(currentCounts)) {
+      if (effectif > effectifMax) {
+        effectifMax = effectif;
+        classeMax = niveau;
       }
-
-      // Vérifier si on a atteint la cible
-      if (currentCounts[niveau] < target) {
-        warnings.push('Classe ' + niveau + ' : Effectif ' + currentCounts[niveau] + ' < cible ' + target);
+      if (effectif < effectifMin) {
+        effectifMin = effectif;
+        classeMin = niveau;
       }
     }
+
+    // Si la différence est <= 1, on a atteint un équilibre acceptable
+    const ecart = effectifMax - effectifMin;
+    if (ecart <= 1) {
+      logLine('INFO', `✅ Effectifs équilibrés : écart max = ${ecart} élève(s)`);
+      break;
+    }
+
+    // Déplacer UN élève LIBRE de la classe la plus remplie vers la classe la plus vide
+    const srcEleves = classesState[classeMax];
+    let eleveToMove = null;
+
+    for (let j = srcEleves.length - 1; j >= 0; j--) {
+      const eleve = srcEleves[j];
+      const codeA = eleve.ASSO || eleve.A || eleve['Code A'] || '';
+      const codeD = eleve.DISSO || eleve.D || eleve['Code D'] || '';
+
+      // ✅ Élève libre = pas de code ASSO ni DISSO
+      if ((!codeA || codeA === '') && (!codeD || codeD === '')) {
+        eleveToMove = eleve;
+        break;
+      }
+    }
+
+    if (eleveToMove) {
+      moveEleveToClass_(classesState, eleveToMove, classeMax, classeMin);
+      logLine('INFO', `  Équilibrage : Déplacé élève de ${classeMax} (${effectifMax}) vers ${classeMin} (${effectifMin})`);
+    } else {
+      // Aucun élève libre, arrêter
+      logLine('WARN', `⚠️ Impossible d'équilibrer davantage : tous les élèves de ${classeMax} ont ASSO/DISSO`);
+      break;
+    }
+  }
+
+  // Vérification finale
+  const finalCounts = {};
+  for (const [niveau, eleves] of Object.entries(classesState)) {
+    finalCounts[niveau] = eleves.length;
+  }
+
+  const effectifs = Object.values(finalCounts);
+  const min = Math.min(...effectifs);
+  const max = Math.max(...effectifs);
+  const ecartFinal = max - min;
+
+  logLine('INFO', `📊 Effectifs finaux : min=${min}, max=${max}, écart=${ecartFinal}`);
+
+  if (ecartFinal > 2) {
+    warnings.push(`⚠️ Déséquilibre persistant : écart de ${ecartFinal} élèves entre classes`);
   }
 }
 

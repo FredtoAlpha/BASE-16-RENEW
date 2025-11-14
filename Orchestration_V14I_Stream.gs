@@ -926,7 +926,7 @@ function computeScoreAveragesByClass_(ctx) {
   const scoresByClass = {};
 
   (ctx.cacheSheets || []).forEach(function(cacheName) {
-    const cls = cacheName.replace(/CACHE$/, '').trim();
+    const cls = cacheName.replace(/CACHE$/, '').replace(/TEST$/, '').trim();
     const sh = (ctx.ss || SpreadsheetApp.getActive()).getSheetByName(cacheName);
 
     if (!sh || sh.getLastRow() < 2) {
@@ -985,6 +985,65 @@ function computeScoreAveragesByClass_(ctx) {
   }
 
   return scoresByClass;
+}
+
+/**
+ * ✅ NOUVELLE FONCTION : Écrit les moyennes dans les onglets TEST et applique la mise en forme
+ */
+function finalizeTestSheets_(ctx) {
+  logLine('INFO', '📊 Finalisation onglets TEST : calcul moyennes et mise en forme...');
+
+  const scoresByClass = computeScoreAveragesByClass_(ctx);
+
+  (ctx.cacheSheets || []).forEach(function(sheetName) {
+    const sh = (ctx.ss || SpreadsheetApp.getActive()).getSheetByName(sheetName);
+    if (!sh || sh.getLastRow() < 2) return;
+
+    const cls = sheetName.replace(/CACHE$/, '').replace(/TEST$/, '').trim();
+    const scores = scoresByClass[cls] || { COM: 0, TRA: 0, PART: 0, ABS: 0, count: 0 };
+
+    // ✅ Écrire les moyennes dans une ligne en bas de l'onglet
+    const lastRow = sh.getLastRow();
+    const newRow = lastRow + 2; // Laisser une ligne vide
+
+    sh.getRange(newRow, 1).setValue('MOYENNES CLASSE');
+    sh.getRange(newRow, 1).setFontWeight('bold').setBackground('#FFE599');
+
+    const data = sh.getDataRange().getValues();
+    const headers = data[0];
+    const idxCOM = headers.indexOf('COM');
+    const idxTRA = headers.indexOf('TRA');
+    const idxPART = headers.indexOf('PART');
+    const idxABS = headers.indexOf('ABS');
+
+    if (idxCOM >= 0) {
+      sh.getRange(newRow, idxCOM + 1).setValue(scores.COM).setFontWeight('bold').setBackground('#FFE599');
+    }
+    if (idxTRA >= 0) {
+      sh.getRange(newRow, idxTRA + 1).setValue(scores.TRA).setFontWeight('bold').setBackground('#FFE599');
+    }
+    if (idxPART >= 0) {
+      sh.getRange(newRow, idxPART + 1).setValue(scores.PART).setFontWeight('bold').setBackground('#FFE599');
+    }
+    if (idxABS >= 0) {
+      sh.getRange(newRow, idxABS + 1).setValue(scores.ABS).setFontWeight('bold').setBackground('#FFE599');
+    }
+
+    // ✅ Formater les en-têtes
+    sh.getRange(1, 1, 1, headers.length).setFontWeight('bold').setBackground('#C6E0B4');
+
+    // ✅ Geler la première ligne
+    sh.setFrozenRows(1);
+
+    // ✅ Ajuster les largeurs de colonnes
+    for (let i = 1; i <= headers.length; i++) {
+      sh.autoResizeColumn(i);
+    }
+
+    logLine('INFO', `  ✅ ${sheetName} finalisé : COM=${scores.COM}, TRA=${scores.TRA}, PART=${scores.PART}, ABS=${scores.ABS}`);
+  });
+
+  logLine('INFO', '✅ Finalisation onglets TEST terminée');
 }
 
 /**
