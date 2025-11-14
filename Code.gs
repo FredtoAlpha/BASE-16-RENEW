@@ -357,7 +357,19 @@ function legacy_runFullPipeline() {
     } else {
       throw new Error('Phase4_balanceScoresSwaps_() non trouvée');
     }
-    
+
+    // ✅ FINALISATION : Mise en forme complète des onglets TEST
+    SpreadsheetApp.getActiveSpreadsheet().toast('Finalisation...', 'Mise en forme TEST', -1);
+    if (typeof finalizeTestSheets_ === 'function') {
+      try {
+        finalizeTestSheets_(ctx);
+      } catch (e) {
+        Logger.log('⚠️ Erreur finalisation TEST : ' + e.message);
+      }
+    } else {
+      Logger.log('⚠️ finalizeTestSheets_() non trouvée');
+    }
+
     const duration = ((new Date() - startTime) / 1000).toFixed(1);
     
     // Compter les onglets TEST créés
