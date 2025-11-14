@@ -1,4 +1,16 @@
 <script>
+(function() {
+  'use strict';
+
+  // ═══════════════════════════════════════════════════════════════════
+  // 🛡️ DOM ENVIRONMENT GUARD
+  // ═══════════════════════════════════════════════════════════════════
+  if (typeof document === 'undefined') {
+    console.warn('[GroupsInterfaceV4] Skipping client-side code in server context');
+    return;
+  }
+  // ═══════════════════════════════════════════════════════════════════
+
 /**
  * GROUPS INTERFACE V4 - TRIPTYQUE
  * Interface utilisateur en trois volets pour la création de groupes
@@ -5629,4 +5641,6 @@ if (typeof window !== 'undefined') {
   window.GroupsInterfaceV4 = GroupsInterfaceV4;
   console.log('✅ GroupsInterfaceV4 chargé');
 }
+
+})(); // Fin du DOM Environment Guard IIFE
 </script>

@@ -488,6 +488,18 @@
   </div>
   
   <script>
+  (function() {
+    'use strict';
+
+    // ═══════════════════════════════════════════════════════════════════
+    // 🛡️ DOM ENVIRONMENT GUARD
+    // ═══════════════════════════════════════════════════════════════════
+    if (typeof document === 'undefined') {
+      console.warn('[ConfigurationComplete] Skipping client-side code in server context');
+      return;
+    }
+    // ═══════════════════════════════════════════════════════════════════
+
     // Données de configuration
   let configData = {
   general: {
@@ -1478,6 +1490,8 @@ function debuggerOptions() {
     })
     .testerOptionsPersonnaliseesInterface();
 }
+
+  })(); // Fin du DOM Environment Guard IIFE
 </script>
 </body>
 </html>

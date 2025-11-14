@@ -579,6 +579,18 @@
 </style>
 
 <script>
+(function() {
+  'use strict';
+
+  // ═══════════════════════════════════════════════════════════════════
+  // 🛡️ DOM ENVIRONMENT GUARD
+  // ═══════════════════════════════════════════════════════════════════
+  if (typeof document === 'undefined') {
+    console.warn('[NewStudentModule] Skipping client-side code in server context');
+    return;
+  }
+  // ═══════════════════════════════════════════════════════════════════
+
 /**
  * Module Nouvel Élève
  * Gère l'UI, le calcul de la meilleure classe, et l'affectation finale
@@ -2160,4 +2172,6 @@ window.addEventListener('DOMContentLoaded', () => {
 if (!window.NewStudentModule) {
   window.NewStudentModule = NewStudentModule;
 }
+
+})(); // Fin du DOM Environment Guard IIFE
 </script>
