@@ -24,6 +24,7 @@ function createLegacyMenu_PRIME() {
     .addItem('🔍 Diagnostic Pré-Lancement', 'legacy_runDiagnostic_Menu')
     .addSeparator()
     .addItem('🚀 Pipeline Complet (Sources → TEST)', 'legacy_runFullPipeline_PRIME')
+    .addItem('🎯 Pipeline JULES CODEX (Moteurs Silencieux)', 'legacy_runJulesCodex_Menu')
     .addSeparator()
     .addSubMenu(ui.createMenu('🔧 Phases Individuelles')
       .addItem('🎯 Phase 1 - Options & LV2', 'legacy_runPhase1_PRIME')
@@ -159,5 +160,44 @@ function legacy_viewTestResults_PRIME() {
 
   } catch (e) {
     ui.alert('❌ Erreur', e.toString(), ui.ButtonSet.OK);
+  }
+}
+
+/**
+ * Lance le pipeline JULES CODEX avec Moteurs Silencieux
+ */
+function legacy_runJulesCodex_Menu() {
+  const ui = SpreadsheetApp.getUi();
+
+  const response = ui.alert(
+    '🎯 JULES CODEX - Pipeline Intelligent',
+    'Cette action va lancer le pipeline LEGACY avec JULES CODEX :\n\n' +
+    '✅ Moteurs Silencieux (ciblage élèves problématiques)\n' +
+    '✅ Distance de distribution (vs variance)\n' +
+    '✅ Ancre de stabilité (anti-oscillations)\n' +
+    '✅ Phase 3 intégrée dans Phase 4\n' +
+    '✅ API unifiée evaluateSwap\n\n' +
+    'Avantages :\n' +
+    '• Convergence plus rapide\n' +
+    '• Meilleure qualité de répartition\n' +
+    '• Prévention des oscillations\n\n' +
+    'Continuer ?',
+    ui.ButtonSet.YES_NO
+  );
+
+  if (response !== ui.Button.YES) {
+    return;
+  }
+
+  try {
+    // Forcer JULES CODEX via propriété de document
+    const docProps = PropertiesService.getDocumentProperties();
+    docProps.setProperty('LEGACY_USE_JULES_CODEX', 'true');
+
+    // Lancer le pipeline (qui détectera automatiquement le flag)
+    legacy_runFullPipeline_PRIME();
+
+  } catch (e) {
+    ui.alert('❌ Erreur JULES CODEX', e.toString(), ui.ButtonSet.OK);
   }
 }
