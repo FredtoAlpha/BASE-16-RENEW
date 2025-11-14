@@ -152,28 +152,53 @@ function legacy_runFullPipeline_PRIME() {
       throw new Error('❌ Phase2I_applyDissoAsso_LEGACY() non trouvée ! Vérifier LEGACY_Phase2_DissoAsso.gs');
     }
 
-    // ========== ÉTAPE 5 : PHASE 3 - EFFECTIFS & PARITÉ ==========
-    SpreadsheetApp.getActiveSpreadsheet().toast('Phase 3/4...', 'Effectifs & Parité', -1);
-    logLine('INFO', '');
+    // ========== CONFIGURATION : JULES CODEX OU MODE LEGACY ==========
+    const useJulesCodex = ctx.useJulesCodex !== undefined ? ctx.useJulesCodex : true;  // JULES CODEX par défaut
+    const useIntegratedPhase3 = ctx.useIntegratedPhase3 !== undefined ? ctx.useIntegratedPhase3 : true;
 
-    if (typeof Phase3I_completeAndParity_LEGACY === 'function') {
-      // ✅ OPTIMISATION : Réutiliser le même contexte
-      const p3Result = Phase3I_completeAndParity_LEGACY(ctx);
-      logLine('INFO', '✅ Phase 3 terminée : ' + (p3Result.message || 'Effectifs équilibrés'));
+    // ========== ÉTAPE 5 : PHASE 3 - EFFECTIFS & PARITÉ (MODE LEGACY UNIQUEMENT) ==========
+    if (useJulesCodex && useIntegratedPhase3) {
+      // Phase 3 intégrée dans Phase 4 JULES CODEX
+      logLine('INFO', '⏭️ Phase 3 sera intégrée dans Phase 4 JULES CODEX');
     } else {
-      throw new Error('❌ Phase3I_completeAndParity_LEGACY() non trouvée ! Vérifier LEGACY_Phase3_Parite.gs');
+      // Mode legacy : Phase 3 séparée
+      SpreadsheetApp.getActiveSpreadsheet().toast('Phase 3/4...', 'Effectifs & Parité', -1);
+      logLine('INFO', '');
+
+      if (typeof Phase3I_completeAndParity_LEGACY === 'function') {
+        // ✅ OPTIMISATION : Réutiliser le même contexte
+        const p3Result = Phase3I_completeAndParity_LEGACY(ctx);
+        logLine('INFO', '✅ Phase 3 terminée : ' + (p3Result.message || 'Effectifs équilibrés'));
+      } else {
+        throw new Error('❌ Phase3I_completeAndParity_LEGACY() non trouvée ! Vérifier LEGACY_Phase3_Parite.gs');
+      }
     }
 
-    // ========== ÉTAPE 6 : PHASE 4 - OPTIMISATION (OPTIMUM PRIME) ==========
-    SpreadsheetApp.getActiveSpreadsheet().toast('Phase 4/4...', 'Équilibrage Scores (OPTIMUM PRIME)', -1);
+    // ========== ÉTAPE 6 : PHASE 4 - OPTIMISATION ==========
+    SpreadsheetApp.getActiveSpreadsheet().toast('Phase 4/4...', 'Équilibrage Intelligent', -1);
     logLine('INFO', '');
 
-    if (typeof Phase4_balanceScoresSwaps_LEGACY === 'function') {
-      // ✅ OPTIMISATION : Réutiliser le même contexte
-      const p4Result = Phase4_balanceScoresSwaps_LEGACY(ctx);
+    let p4Result;
+
+    if (useJulesCodex && typeof Phase4_JulesCodex_LEGACY === 'function') {
+      // 🎯 MODE JULES CODEX : Moteurs Silencieux + Distance Distribution
+      logLine('INFO', '🎯 Utilisation Phase 4 JULES CODEX (Moteurs Silencieux)');
+      p4Result = Phase4_JulesCodex_LEGACY(ctx);
+
+      if (p4Result.phase3Integrated) {
+        logLine('INFO', '✅ Phase 3+4 JULES CODEX terminée : ' + (p4Result.swapsApplied || 0) + ' swaps, score=' + p4Result.finalScore.toFixed(3));
+      } else {
+        logLine('INFO', '✅ Phase 4 JULES CODEX terminée : ' + (p4Result.swapsApplied || 0) + ' swaps, score=' + p4Result.finalScore.toFixed(3));
+      }
+
+    } else if (typeof Phase4_balanceScoresSwaps_LEGACY === 'function') {
+      // ⚙️ FALLBACK MODE LEGACY : Variance classique
+      logLine('INFO', '⚙️ Fallback Phase 4 LEGACY (mode classique)');
+      p4Result = Phase4_balanceScoresSwaps_LEGACY(ctx);
       logLine('INFO', '✅ Phase 4 terminée : ' + (p4Result.swapsApplied || 0) + ' swaps appliqués');
+
     } else {
-      throw new Error('❌ Phase4_balanceScoresSwaps_LEGACY() non trouvée ! Vérifier LEGACY_Phase4_Optimisation.gs');
+      throw new Error('❌ Aucune implémentation Phase 4 disponible ! Vérifier LEGACY_Phase4_*.gs');
     }
 
     // ========== ÉTAPE 7 : FINALISATION ==========
