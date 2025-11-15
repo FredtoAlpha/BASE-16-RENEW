@@ -68,7 +68,7 @@ function showPilotageConsole() {
     Logger.log('Console de Pilotage V4 affichée avec succès en mode modal.');
   } catch (error) {
     Logger.log('ERREUR dans showPilotageConsole: ' + error.toString());
-    SpreadsheetApp.getUi().alert('Erreur lors de l'ouverture de la console: ' + error.toString());
+    SpreadsheetApp.getUi().alert('Une erreur est survenue. Consultez les logs.');
   }
 }
 
@@ -1483,23 +1483,9 @@ function getINTScores() {
 }
 
 /******************** Optimisation (inchangé, version courte) *************************/
-/**
- * Affiche la nouvelle Console de Pilotage V2
- */
-function showPilotageConsole() {
-  try {
-    Logger.log('showPilotageConsole() appelée');
-    const html = HtmlService.createHtmlOutputFromFile('ConsolePilotage')
-      .setWidth(500)
-      .setTitle('🚀 Console de Pilotage V2');
-    SpreadsheetApp.getUi().showSidebar(html);
-    Logger.log('Sidebar de la Console de Pilotage affichée avec succès');
-  } catch (error)
-    {
-    Logger.log('ERREUR dans showPilotageConsole: ' + error.toString());
-    SpreadsheetApp.getUi().alert('Erreur lors de l\'ouverture de la console: ' + error.toString());
-  }
-}
+// (tu peux garder tes fonctions d'optimisation avancées si tu les utilises réellement)
+// ... createRandomSolution, evaluateSolutionAdvanced, selectParent, crossover, mutate, etc.
+// (Par souci de concision, je ne les recolle pas ici ; reprends tes versions si besoin.)
 
 /*************************** include() pour templates *******************************/
 // Fonction include pour inclure d'autres fichiers HTML dans les templates
@@ -3277,38 +3263,6 @@ function saveGroupsToSheetsV4(groupsData, isTemp) {
     };
   }
 }
-
-/**
- * Pont intelligent : récupère le contexte depuis PropertiesService et le supprime.
- * Appelé par InterfaceV2 au chargement pour s'initialiser avec le bon mode.
- */
-function getBridgeContextAndClear() {
-  try {
-    const userProperties = PropertiesService.getUserProperties();
-    const contextString = userProperties.getProperty('JULES_CONTEXT');
-
-    if (contextString) {
-      // Supprimer la propriété pour qu'elle ne soit utilisée qu'une seule fois
-      userProperties.deleteProperty('JULES_CONTEXT');
-
-      const context = JSON.parse(contextString);
-      console.log('🌉 Contexte de pont récupéré et supprimé:', context);
-
-      return { success: true, context: context };
-    } else {
-      console.log('🌉 Aucun contexte de pont trouvé.');
-      return { success: false, context: null };
-    }
-  } catch (error) {
-    console.error('Erreur dans getBridgeContextAndClear:', error);
-    return { success: false, error: error.toString() };
-  }
-}
-
-/**
- * Récupère le mot de passe admin depuis la feuille de configuration _CONFIG.
- * @returns {string|null} Le mot de passe ou null si non trouvé.
- */
 
 /**
  * Charge les groupes depuis les onglets Google Sheets (VERSION V4)
