@@ -11,7 +11,7 @@ function onOpen() {
 
     // ========== NOUVEAU MENU CONSOLE ==========
     ui.createMenu('🎯 CONSOLE')
-      .addItem('📋 Panneau de Contrôle', 'showPanneauControle')
+      .addItem('🚀 Console de Pilotage V2', 'showPilotageConsole')
       .addSeparator()
       .addItem('🏗️ Initialiser Système', 'ouvrirInitialisation')
       .addItem('🆔 Générer NOM_PRENOM & ID', 'genererNomPrenomEtID')
@@ -1468,9 +1468,23 @@ function getINTScores() {
 }
 
 /******************** Optimisation (inchangé, version courte) *************************/
-// (tu peux garder tes fonctions d'optimisation avancées si tu les utilises réellement)
-// ... createRandomSolution, evaluateSolutionAdvanced, selectParent, crossover, mutate, etc.
-// (Par souci de concision, je ne les recolle pas ici ; reprends tes versions si besoin.)
+/**
+ * Affiche la nouvelle Console de Pilotage V2
+ */
+function showPilotageConsole() {
+  try {
+    Logger.log('showPilotageConsole() appelée');
+    const html = HtmlService.createHtmlOutputFromFile('ConsolePilotage')
+      .setWidth(500)
+      .setTitle('🚀 Console de Pilotage V2');
+    SpreadsheetApp.getUi().showSidebar(html);
+    Logger.log('Sidebar de la Console de Pilotage affichée avec succès');
+  } catch (error)
+    {
+    Logger.log('ERREUR dans showPilotageConsole: ' + error.toString());
+    SpreadsheetApp.getUi().alert('Erreur lors de l\'ouverture de la console: ' + error.toString());
+  }
+}
 
 /*************************** include() pour templates *******************************/
 // Fonction include pour inclure d'autres fichiers HTML dans les templates
