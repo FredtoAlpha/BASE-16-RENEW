@@ -1,79 +1,147 @@
 /**
- * ===================================================================
- * 🧠 Diagnostic Service - Moteur de Validation Centralisé
- * ===================================================================
- *
- * Ce service fournit des fonctions pour valider l'état du projet à
- * différentes étapes du workflow. Il est conçu pour retourner des
- * objets structurés (erreurs, avertissements, informations) qui
- * peuvent être facilement consommés par l'interface utilisateur.
- *
- * @version 1.0
- * @date 2025-11-15
- * ===================================================================
+ * @fileoverview Service de diagnostic pour valider la cohérence des données.
+ * Vérifie les doublons, les contraintes, les quotas, etc.
  */
 
-/**
- * Exécute une série complète de diagnostics sur le projet.
- * @returns {Array<object>} Un tableau d'objets de diagnostic.
- * Chaque objet a la forme : { id: string, status: 'ok'|'warning'|'error', icon: string, message: string, ...data }
- */
-function runGlobalDiagnostics() {
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+const DiagnosticService = {
+  /**
+   * Lance une suite complète de diagnostics sur les données sources.
+   * @returns {Array<Object>} Un tableau d'objets de résultats { message: string, status: 'ok'|'warning'|'error' }.
+   */
+  runGlobalDiagnostics: function() {
     const results = [];
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
 
-    // --- Vérifications de base (fichiers de configuration) ---
-    const consolidationSheet = ss.getSheetByName('CONSOLIDATION');
-    const structureSheet = ss.getSheetByName('_STRUCTURE');
-    if (!consolidationSheet || !structureSheet) {
-      results.push({ id: 'config_sheets', status: 'error', icon: 'error', message: "Onglets CONSOLIDATION ou _STRUCTURE manquants." });
-      return results; // Arrêt prématuré si la config de base est absente
+    // Tenter de récupérer les données consolidées. Si ça échoue, c'est une erreur bloquante.
+    let allStudents;
+    try {
+      allStudents = this.getAllStudentsFromSources_();
+      results.push({
+        message: `${allStudents.length} élèves consolidés depuis les sources.`,
+        status: 'ok'
+      });
+    } catch (e) {
+      results.push({ message: `Erreur critique: Impossible de lire les onglets sources. ${e.message}`, status: 'error' });
+      return results; // Arrêter ici si les sources ne sont pas lisibles.
     }
 
-    // --- Diagnostics sur les données (depuis CONSOLIDATION) ---
-    const studentCount = consolidationSheet.getLastRow() > 1 ? consolidationSheet.getLastRow() - 1 : 0;
-    results.push({ id: 'student_count', status: 'ok', icon: 'check_circle', message: `${studentCount} élèves trouvés.`, count: studentCount });
+    // Diagnostic 1: Vérification des doublons d'ID_ELEVE
+    const duplicateCheck = this.checkDuplicateIds_(allStudents);
+    results.push(duplicateCheck);
 
-    // Diagnostic de doublons d'ID
-    if (studentCount > 0) {
-      const idColumn = consolidationSheet.getRange(2, 1, studentCount, 1).getValues();
-      const idSet = new Set();
-      const duplicates = idColumn.reduce((acc, row) => {
-        const id = row[0];
-        if (id) {
-          if (idSet.has(id)) acc.push(id);
-          else idSet.add(id);
-        }
-        return acc;
-      }, []);
+    // Diagnostic 2: Cohérence des effectifs vs quotas de structure
+    const structureCheck = this.checkStructureQuotas_(ss, allStudents);
+    results.push(...structureCheck);
 
-      if (duplicates.length > 0) {
-        results.push({ id: 'id_duplicates', status: 'error', icon: 'error', message: `${duplicates.length} doublons d'ID trouvés (ex: ${duplicates[0]}).` });
-      } else {
-        results.push({ id: 'id_duplicates', status: 'ok', icon: 'check_circle', message: `Aucun doublon d'ID détecté.` });
-      }
-    }
-
-    // --- Diagnostics sur la configuration (depuis _STRUCTURE) ---
-    const structureData = structureSheet.getLastRow() > 1 ? structureSheet.getRange(2, 2, structureSheet.getLastRow() - 1, 1).getValues() : [];
-    const totalPlaces = structureData.reduce((sum, row) => sum + (parseInt(row[0], 10) || 0), 0);
-    results.push({ id: 'place_count', status: 'ok', icon: 'check_circle', message: `${totalPlaces} places configurées.` });
-
-    // --- Diagnostics croisés (Données vs Configuration) ---
-    if (studentCount > totalPlaces) {
-      results.push({ id: 'student_vs_places', status: 'warning', icon: 'warning', message: `Attention, il y a plus d'élèves (${studentCount}) que de places (${totalPlaces}).` });
-    } else if (totalPlaces > studentCount) {
-       results.push({ id: 'student_vs_places', status: 'info', icon: 'info', message: `Il y a plus de places (${totalPlaces}) que d'élèves (${studentCount}).` });
-    } else {
-       results.push({ id: 'student_vs_places', status: 'ok', icon: 'check_circle', message: `Le nombre d'élèves correspond au nombre de places.` });
-    }
-
-    // On ajoutera ici les diagnostics de contraintes ASSO/DISSO, etc.
+    // Ajouter d'autres diagnostics ici au besoin...
 
     return results;
-  } catch(e) {
-    // En cas d'erreur majeure, retourner une seule erreur critique
-    return [{ id: 'fatal_error', status: 'error', icon: 'error', message: 'Erreur critique du service de diagnostic: ' + e.message }];
+  },
+
+  /**
+   * Récupère et consolide tous les élèves depuis les onglets sources.
+   * @private
+   * @returns {Array<Object>} Tableau d'objets élève.
+   */
+  getAllStudentsFromSources_: function() {
+    // Utilise le service existant pour lire les données en mode 'PREVIOUS' (sources originales)
+    const sourceClasses = getElevesDataForMode('PREVIOUS');
+    if (!sourceClasses || sourceClasses.length === 0) {
+      throw new Error("Aucun onglet source trouvé ou les onglets sont vides.");
+    }
+
+    let allStudents = [];
+    sourceClasses.forEach(c => {
+      if (c.eleves) {
+        allStudents = allStudents.concat(c.eleves);
+      }
+    });
+    return allStudents;
+  },
+
+  /**
+   * Vérifie la présence d'ID_ELEVE en double.
+   * @private
+   * @param {Array<Object>} students - Le tableau de tous les élèves.
+   * @returns {Object} Résultat du diagnostic.
+   */
+  checkDuplicateIds_: function(students) {
+    const idCounts = students.reduce((acc, student) => {
+      acc[student.id] = (acc[student.id] || 0) + 1;
+      return acc;
+    }, {});
+
+    const duplicates = Object.entries(idCounts).filter(([id, count]) => count > 1);
+
+    if (duplicates.length > 0) {
+      const dupsStr = duplicates.map(([id, count]) => `${id} (x${count})`).join(', ');
+      return {
+        message: `Erreur: ${duplicates.length} ID élève en double trouvés: ${dupsStr}.`,
+        status: 'error'
+      };
+    }
+
+    return { message: "Aucun ID élève en double détecté.", status: 'ok' };
+  },
+
+  /**
+   * Vérifie la cohérence entre les effectifs et les quotas de l'onglet _STRUCTURE.
+   * @private
+   * @param {Spreadsheet} ss - Le spreadsheet actif.
+   * @param {Array<Object>} students - Le tableau de tous les élèves.
+   * @returns {Array<Object>} Tableau de résultats de diagnostic.
+   */
+  checkStructureQuotas_: function(ss, students) {
+    const results = [];
+    const structureSheet = ss.getSheetByName('_STRUCTURE');
+    if (!structureSheet) {
+      results.push({ message: "Avertissement: L'onglet _STRUCTURE est introuvable.", status: 'warning' });
+      return results;
+    }
+
+    const rules = getStructureRules();
+    const totalCapacity = Object.values(rules).reduce((sum, rule) => sum + (rule.capacity || 0), 0);
+    const totalStudents = students.length;
+
+    if (totalStudents > totalCapacity) {
+      results.push({
+        message: `Erreur: Le nombre total d'élèves (${totalStudents}) dépasse la capacité totale des classes (${totalCapacity}).`,
+        status: 'error'
+      });
+    } else if (totalStudents < totalCapacity * 0.9) {
+       results.push({
+        message: `Avertissement: Le nombre d'élèves (${totalStudents}) est très inférieur à la capacité totale (${totalCapacity}).`,
+        status: 'warning'
+      });
+    } else {
+       results.push({
+        message: "La capacité totale des classes est cohérente avec l'effectif.",
+        status: 'ok'
+      });
+    }
+
+    // Vérification des quotas par option
+    const studentOptions = students.reduce((acc, student) => {
+      if (student.opt) acc[student.opt] = (acc[student.opt] || 0) + 1;
+      if (student.lv2) acc[student.lv2] = (acc[student.lv2] || 0) + 1;
+      return acc;
+    }, {});
+
+    const totalQuotas = {};
+     Object.values(rules).forEach(rule => {
+        for(const opt in rule.quotas){
+            totalQuotas[opt] = (totalQuotas[opt] || 0) + rule.quotas[opt];
+        }
+     });
+
+    for(const opt in studentOptions){
+        if(totalQuotas[opt] === undefined){
+            results.push({message: `Avertissement: L'option "${opt}" présente chez ${studentOptions[opt]} élèves n'a aucun quota défini dans _STRUCTURE.`, status: 'warning'});
+        } else if (studentOptions[opt] > totalQuotas[opt]){
+            results.push({message: `Erreur: Il y a ${studentOptions[opt]} élèves pour l'option "${opt}" mais seulement ${totalQuotas[opt]} places au total.`, status: 'error'});
+        }
+    }
+
+    return results;
   }
-}
+};
