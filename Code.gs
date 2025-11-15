@@ -6,55 +6,69 @@
 function onOpen() {
   try {
     const ui = SpreadsheetApp.getUi();
-
     Logger.log('onOpen() démarré');
 
-    // ========== NOUVEAU MENU CONSOLE ==========
-    ui.createMenu('🎯 CONSOLE')
-      .addItem('🚀 Console de Pilotage V3 (EXPERT)', 'ouvrirConsolePilotageV3')
-      .addItem('📊 Console de Pilotage V2', 'showPilotageConsole')
-      .addSeparator()
-      .addItem('🏗️ Initialiser Système', 'ouvrirInitialisation')
-      .addItem('🆔 Générer NOM_PRENOM & ID', 'genererNomPrenomEtID')
-      .addItem('📋 Listes Déroulantes', 'ajouterListesDeroulantes')
-      .addSeparator()
-      .addItem('📊 COMPTER Sources', 'compterEffectifsOptionsEtLangues')
-      .addItem('📊 COMPTER Test', 'compterEffectifsOptionsEtLanguesTest')
-      .addSeparator()
-      .addItem('🔗 Consolider Sources', 'consoliderDonnees')
-      .addItem('✅ Vérifier Données', 'verifierDonnees')
-      .addSeparator()
-      .addItem('⚙️ Configuration Structure', 'ouvrirConfigurationStructure')
-      .addItem('⚙️ Configuration Complète', 'ouvrirConfigurationComplete')
-      .addSeparator()
-      .addItem('🔓 Déverrouiller _STRUCTURE', 'deverrouillerStructure')
-      .addToUi();
+    // ========== MENU PRINCIPAL V4 ==========
+    const menuV4 = ui.createMenu('-- OPALE V4 --');
 
-    Logger.log('Menu CONSOLE créé');
+    // 1. Accès principal à la nouvelle console
+    menuV4.addItem('✅ CONSOLE DE PILOTAGE V4', 'showPilotageConsole');
+    menuV4.addSeparator();
 
-    // Menu LEGACY (Pipeline complet : Sources → TEST)
-    ui.createMenu('⚙️ LEGACY')
-      .addItem('📋 Voir Classes Sources (6°1, 6°2...)', 'legacy_viewSourceClasses')
-      .addItem('⚙️ Configurer _STRUCTURE', 'legacy_openStructure')
-      .addSeparator()
-      .addItem('▶️ Créer Onglets TEST (Pipeline Complet)', 'legacy_runFullPipeline')
-      .addSeparator()
-      .addSubMenu(ui.createMenu('🔧 Phases Individuelles')
+    // 2. Interface de swap (InterfaceV2)
+    menuV4.addItem('🔄 SWAPS MANUELS (Interface V2)', 'showInterfaceV2');
+    menuV4.addSeparator();
+
+    // 3. Sous-menu pour les anciens outils (maintenus pour la transition)
+    const legacyToolsSubMenu = ui.createMenu('--- ACCÈS DIRECT OUTILS ---');
+
+    // Ancien menu "CONSOLE"
+    legacyToolsSubMenu.addItem('🏗️ Initialiser Système', 'ouvrirInitialisation');
+    legacyToolsSubMenu.addItem('🆔 Générer NOM_PRENOM & ID', 'genererNomPrenomEtID');
+    legacyToolsSubMenu.addSeparator();
+    legacyToolsSubMenu.addItem('📊 COMPTER Sources', 'compterEffectifsOptionsEtLangues');
+    legacyToolsSubMenu.addItem('📊 COMPTER Test', 'compterEffectifsOptionsEtLanguesTest');
+    legacyToolsSubMenu.addSeparator();
+    legacyToolsSubMenu.addItem('🔗 Consolider Sources', 'consoliderDonnees');
+    legacyToolsSubMenu.addItem('✅ Vérifier Données', 'verifierDonnees');
+    legacyToolsSubMenu.addSeparator();
+
+    // Ancien menu "LEGACY"
+    legacyToolsSubMenu.addItem('▶️ Créer Onglets TEST (Pipeline Complet)', 'legacy_runFullPipeline');
+     legacyToolsSubMenu.addSubMenu(ui.createMenu('🔧 Phases Individuelles LEGACY')
         .addItem('🎯 Phase 1 - Options & LV2', 'legacy_runPhase1')
         .addItem('🔗 Phase 2 - ASSO/DISSO', 'legacy_runPhase2')
         .addItem('⚖️ Phase 3 - Effectifs & Parité', 'legacy_runPhase3')
-        .addItem('🔄 Phase 4 - Équilibrage Scores', 'legacy_runPhase4'))
-      .addSeparator()
-      .addItem('📊 Voir Résultats TEST', 'legacy_viewTestResults')
-      .addToUi();
+        .addItem('🔄 Phase 4 - Équilibrage Scores', 'legacy_runPhase4'));
 
-    Logger.log('Menu LEGACY créé');
+    menuV4.addSubMenu(legacyToolsSubMenu);
+
+    menuV4.addToUi();
+
+    Logger.log('Menu OPALE V4 créé');
     Logger.log('onOpen() terminé avec succès');
 
   } catch (error) {
     Logger.log('ERREUR dans onOpen(): ' + error.toString());
     Logger.log('Stack: ' + error.stack);
     // Ne pas afficher d'alert ici car ça peut bloquer le chargement
+  }
+}
+
+/**
+ * Affiche la nouvelle Console de Pilotage V4 dans une fenêtre modale large.
+ */
+function showPilotageConsole() {
+  try {
+    Logger.log('showPilotageConsole() appelée pour affichage modal');
+    const html = HtmlService.createHtmlOutputFromFile('ConsolePilotage')
+      .setWidth(1200)
+      .setHeight(800);
+    SpreadsheetApp.getUi().showModalDialog(html, '🚀 Console de Pilotage V4');
+    Logger.log('Console de Pilotage V4 affichée avec succès en mode modal.');
+  } catch (error) {
+    Logger.log('ERREUR dans showPilotageConsole: ' + error.toString());
+    SpreadsheetApp.getUi().alert('Erreur lors de l'ouverture de la console: ' + error.toString());
   }
 }
 

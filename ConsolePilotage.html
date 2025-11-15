@@ -6,41 +6,149 @@
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --primary-color: #4299E1;
-            --background-color: #F7FAFC;
-            --sidebar-bg: #1A202C;
-            --card-bg: #FFFFFF;
-            --text-primary: #2D3748;
-            --text-secondary: #718096;
-            --border-color: #E2E8F0;
+            /* Light Mode Palette */
+            --bg-primary-light: #ffffff;
+            --bg-secondary-light: #f7fafc;
+            --sidebar-bg-light: #1a202c;
+            --text-primary-light: #2d3748;
+            --text-secondary-light: #718096;
+            --border-color-light: #e2e8f0;
+            --accent-color-light: #4299e1;
+
+            /* Dark Mode Palette */
+            --bg-primary-dark: #1a202c;
+            --bg-secondary-dark: #2d3748;
+            --sidebar-bg-dark: #111827;
+            --text-primary-dark: #f7fafc;
+            --text-secondary-dark: #a0aec0;
+            --border-color-dark: #4a5568;
+            --accent-color-dark: #63b3ed;
+
+            /* Mapped Variables (Defaults to Light Mode) */
+            --bg-primary: var(--bg-primary-light);
+            --bg-secondary: var(--bg-secondary-light);
+            --sidebar-bg: var(--sidebar-bg-light);
+            --text-primary: var(--text-primary-light);
+            --text-secondary: var(--text-secondary-light);
+            --border-color: var(--border-color-light);
+            --accent-color: var(--accent-color-light);
+        }
+        .dark-mode {
+            --bg-primary: var(--bg-primary-dark);
+            --bg-secondary: var(--bg-secondary-dark);
+            --sidebar-bg: var(--sidebar-bg-dark);
+            --text-primary: var(--text-primary-dark);
+            --text-secondary: var(--text-secondary-dark);
+            --border-color: var(--border-color-dark);
+            --accent-color: var(--accent-color-dark);
         }
         body {
             font-family: 'Roboto', sans-serif;
             margin: 0;
-            background-color: var(--background-color);
-            display: flex;
+            background-color: var(--bg-secondary);
             height: 100vh;
             color: var(--text-primary);
+            overflow: hidden;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        .app-container {
+            display: grid;
+            grid-template-columns: 250px 1fr 300px;
+            height: 100%;
         }
         .sidebar {
-            width: 250px;
             background-color: var(--sidebar-bg);
             display: flex;
             flex-direction: column;
         }
         .main-content {
-            flex-grow: 1;
             padding: 20px;
             overflow-y: auto;
         }
-        .wizard-content { display: none; }
-        .wizard-content.active { display: block; }
+        .diagnostic-panel {
+            background-color: var(--bg-primary);
+            border-left: 1px solid var(--border-color);
+            padding: 20px;
+            overflow-y: auto;
+        }
+        .sidebar-footer {
+            margin-top: auto;
+            padding: 20px;
+        }
+        .dark-mode-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            color: var(--text-secondary);
+        }
+        .switch { position: relative; display: inline-block; width: 40px; height: 24px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; }
+        .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 4px; bottom: 4px; background-color: white; transition: .4s; }
+        input:checked + .slider { background-color: var(--accent-color); }
+        input:checked + .slider:before { transform: translateX(16px); }
+        .slider.round { border-radius: 34px; }
+        .slider.round:before { border-radius: 50%; }
+        .panel-header {
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .panel-header h3 {
+            margin: 0;
+            font-size: 16px;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+        .diagnostic-checklist h4 {
+            font-size: 14px;
+            font-weight: 500;
+            margin-top: 20px;
+            margin-bottom: 10px;
+            color: var(--text-secondary);
+        }
+        .wizard-content {
+            display: none;
+            opacity: 0;
+            transition: opacity 0.4s ease-in-out;
+        }
+        .wizard-content.active {
+            display: block;
+            opacity: 1;
+        }
+        #toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 2000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .toast {
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            color: white;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            opacity: 0;
+            transform: translateX(100%);
+            animation: slideIn 0.5s forwards, fadeOut 0.5s 4.5s forwards;
+        }
+        .toast.success { background-color: #48BB78; }
+        .toast.error { background-color: #F56565; }
+        .toast.info { background-color: #4299E1; }
+        @keyframes slideIn { to { opacity: 1; transform: translateX(0); } }
+        @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; transform: translateX(100%); } }
         .phase-title { font-size: 24px; font-weight: 700; margin-bottom: 20px; color: var(--text-primary); }
         .card {
-            background-color: var(--card-bg);
+            background-color: var(--bg-primary);
             border-radius: 8px;
             padding: 20px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
             border: 1px solid var(--border-color);
         }
         .card-title { font-size: 18px; font-weight: 500; margin-top: 0; margin-bottom: 10px; }
@@ -48,402 +156,164 @@
             display: inline-block;
             padding: 10px 20px;
             border-radius: 6px;
-            background-color: var(--primary-color);
+            background-color: var(--accent-color);
             color: white;
             font-weight: 500;
             text-decoration: none;
             border: none;
             cursor: pointer;
-            transition: background-color 0.2s;
+            transition: background-color 0.2s, transform 0.2s ease-out;
         }
-        .btn:hover:not(:disabled) { background-color: #2B6CB0; }
+        .btn:hover:not(:disabled) {
+            background-color: #2b6cb0;
+            transform: scale(1.05);
+        }
         .btn:disabled { background-color: #A0AEC0; cursor: not-allowed; }
         .btn-secondary { background-color: #718096; }
-        .btn-secondary:hover { background-color: #4A5568; }
-        /* Modal styles */
+        .btn-secondary:hover:not(:disabled) { background-color: #4A5568; }
+
         .modal {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0,0,0,0.5);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.6); display: flex;
+            align-items: center; justify-content: center; z-index: 1000;
         }
         .modal.hidden { display: none; }
         .modal-content {
-            background-color: white;
-            padding: 20px;
-            border-radius: 8px;
-            width: 90%;
-            max-width: 600px;
+            background-color: var(--bg-primary); padding: 25px; border-radius: 8px;
+            width: 90%; max-width: 600px;
         }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-bottom: 10px; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-bottom: 15px; }
         .modal-title { font-size: 20px; font-weight: 500; }
-        .modal-close { background: none; border: none; font-size: 24px; cursor: pointer; }
-        .modal-footer { border-top: 1px solid var(--border-color); padding-top: 10px; margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px; }
+        .modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-secondary); }
+        .modal-footer { border-top: 1px solid var(--border-color); padding-top: 15px; margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px; }
         .checklist { list-style: none; padding: 0; }
-        .checklist-item { padding: 8px; border-radius: 4px; margin-bottom: 5px; display: flex; align-items: center; }
-        .checklist-item .icon-container { margin-right: 10px; }
-        .status-ok { background-color: #F0FFF4; }
-        .status-warning { background-color: #FFFBEB; }
-        .status-error { background-color: #FFF5F5; }
+        .checklist-item { padding: 8px; border-radius: 4px; margin-bottom: 5px; display: flex; align-items: center; gap: 10px; }
+        .status-ok { background-color: #F0FFF4; color: #276749; }
+        .status-warning { background-color: #FFFBEB; color: #9B2C2C;}
+        .status-error { background-color: #FFF5F5; color: #744210;}
 
-        .sidebar-header { padding: 20px; background-color: #1A202C; color: white; }
-        .sidebar-title { font-size: 20px; font-weight: 700; }
-        .sidebar-subtitle { font-size: 12px; opacity: 0.8; }
+        .sidebar-header { padding: 20px; }
+        .sidebar-title { font-size: 20px; font-weight: 700; color: white; }
+        .sidebar-subtitle { font-size: 12px; opacity: 0.8; color: #a0aec0; }
         .sidebar-nav { padding-top: 10px; }
-        .nav-item { display: flex; align-items: center; padding: 12px 20px; color: #A0AEC0; text-decoration: none; border-left: 4px solid transparent; transition: all 0.2s; }
-        .nav-item:hover { background-color: #2D3748; color: white; }
-        .nav-item.active { background-color: #2D3748; color: white; border-left-color: #4299E1; }
-        .nav-icon { flex-shrink: 0; width: 24px; height: 24px; border-radius: 50%; background-color: #4A5568; color: white; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; margin-right: 15px; }
-        .nav-item.active .nav-icon { background-color: #4299E1; }
+        .nav-item {
+            display: flex; align-items: center; padding: 12px 20px;
+            color: #A0AEC0; text-decoration: none; border-left: 4px solid transparent;
+            transition: background-color 0.2s, color 0.2s, border-left-color 0.3s ease-out;
+        }
+        .nav-item.disabled { color: #718096; cursor: not-allowed; background-color: transparent; }
+        .nav-item:not(.disabled):hover { background-color: #2D3748; color: white; }
+        .nav-item.active { background-color: #2D3748; color: white; border-left-color: var(--accent-color); }
+        .nav-icon {
+            flex-shrink: 0; width: 24px; height: 24px; border-radius: 50%;
+            background-color: #4A5568; color: white; display: flex;
+            align-items: center; justify-content: center; font-size: 14px;
+            font-weight: 700; margin-right: 15px; transition: background-color 0.2s;
+        }
+        .nav-item.active .nav-icon { background-color: var(--accent-color); }
+        .nav-item.disabled .nav-icon { background-color: #4A5568; color: #A0AEC0; }
         .nav-text { flex-grow: 1; }
         .nav-badge { font-size: 11px; padding: 2px 8px; border-radius: 12px; font-weight: 500; }
-        .status-todo { background-color: #E2E8F0; color: #4A5568; }
-        .status-pending { background-color: #F6E05E; color: #744210; }
-        .status-success { background-color: #68D391; color: #276749; }
-        .status-error { background-color: #FC8181; color: #9B2C2C; }
+        .status-todo { background-color: #4A5568; color: #E2E8F0; }
+        .status-pending { background-color: #ECC94B; color: #744210; }
+        .status-success { background-color: #48BB78; color: #1A472A; }
+        .status-error { background-color: #F56565; color: #742A2A; }
         .diagnostic-list { list-style: none; padding: 0; margin-top: 15px; }
         .diagnostic-item { display: flex; align-items: center; padding: 8px; border-radius: 4px; margin-bottom: 5px; }
         .diagnostic-item.status-ok { background-color: #F0FFF4; }
         .diagnostic-item.status-warning { background-color: #FFFBEB; }
         .diagnostic-item.status-error { background-color: #FFF5F5; }
         .diagnostic-icon { margin-right: 10px; }
-        .confirm-checkbox-label { display: flex; align-items: center; font-size: 12px; color: #4A5568; margin-right: auto; }
+        .confirm-checkbox-label { display: flex; align-items: center; font-size: 12px; color: var(--text-secondary); margin-right: auto; }
         #confirm-checklist { margin-right: 8px; }
     </style>
 </head>
 <body>
-    <div class="sidebar">
+
+<div class="app-container">
+    <aside class="sidebar">
         <div class="sidebar-header">
-            <h1 class="sidebar-title">Console de Pilotage</h1>
-            <div class="sidebar-subtitle">Version 2.0</div>
+            <h1 class="sidebar-title">Console V4</h1>
+            <div class="sidebar-subtitle">Expert Edition</div>
         </div>
-        <nav class="sidebar-nav">
-            <a href="#" class="nav-item active" data-step="1">
+        <nav class="sidebar-nav" role="tablist" aria-orientation="vertical">
+            <a href="#" class="nav-item active" data-step="1" role="tab" aria-controls="phase-1" aria-selected="true">
                 <span class="nav-icon">1</span>
                 <span class="nav-text">Initialisation</span>
                 <span id="badge-1" class="nav-badge status-pending">En attente</span>
             </a>
-            <a href="#" class="nav-item" data-step="2">
+            <a href="#" class="nav-item" data-step="2" role="tab" aria-controls="phase-2" aria-selected="false">
                 <span class="nav-icon">2</span>
                 <span class="nav-text">Diagnostic</span>
                 <span id="badge-2" class="nav-badge status-todo">À faire</span>
             </a>
-            <a href="#" class="nav-item" data-step="3">
+            <a href="#" class="nav-item" data-step="3" role="tab" aria-controls="phase-3" aria-selected="false">
                 <span class="nav-icon">3</span>
                 <span class="nav-text">Génération</span>
                 <span id="badge-3" class="nav-badge status-todo">À faire</span>
             </a>
-            <a href="#" class="nav-item" data-step="4">
+            <a href="#" class="nav-item" data-step="4" role="tab" aria-controls="phase-4" aria-selected="false">
                 <span class="nav-icon">4</span>
                 <span class="nav-text">Optimisation</span>
                 <span id="badge-4" class="nav-badge status-todo">À faire</span>
             </a>
-            <a href="#" class="nav-item" data-step="5">
+            <a href="#" class="nav-item" data-step="5" role="tab" aria-controls="phase-5" aria-selected="false">
                 <span class="nav-icon">5</span>
                 <span class="nav-text">Swaps Manuels</span>
                 <span id="badge-5" class="nav-badge status-todo">À faire</span>
             </a>
-            <a href="#" class="nav-item" data-step="6">
+            <a href="#" class="nav-item" data-step="6" role="tab" aria-controls="phase-6" aria-selected="false">
                 <span class="nav-icon">6</span>
                 <span class="nav-text">Finalisation</span>
                 <span id="badge-6" class="nav-badge status-todo">À faire</span>
             </a>
         </nav>
-    </div>
-    <div class="main-content">
-        <!-- Phase 1: Initialisation -->
-        <div id="phase-1" class="wizard-content active">
+        <div class="sidebar-footer">
+            <div class="dark-mode-toggle">
+                <span class="material-icons">wb_sunny</span>
+                <label class="switch">
+                    <input type="checkbox" id="dark-mode-switch">
+                    <span class="slider round"></span>
+                </label>
+                <span class="material-icons">nights_stay</span>
+            </div>
+        </div>
+    </aside>
+
+    <main class="main-content">
+        <div id="phase-1" class="wizard-content active" role="tabpanel">
             <h2 class="phase-title">Phase 1: Initialisation</h2>
-            <div class="card">
-                <h3 class="card-title">Configuration Initiale</h3>
-                <p>Cette étape prépare le système pour la répartition. Elle va consolider les données des onglets sources et vérifier la configuration.</p>
-                <button id="btn-run-initialisation" class="btn btn-primary">Lancer l'Initialisation</button>
-            </div>
+            <div class="card"><h3 class="card-title">Configuration Initiale</h3><p>Prépare le système pour la répartition en consolidant les données et vérifiant la configuration.</p><button id="btn-run-initialisation" class="btn">Lancer l'Initialisation</button></div>
         </div>
-        <!-- Phase 2: Diagnostic -->
-        <div id="phase-2" class="wizard-content">
+        <div id="phase-2" class="wizard-content" role="tabpanel">
             <h2 class="phase-title">Phase 2: Diagnostic</h2>
-            <div id="live-diagnostic-panel" class="card">
-                <h3 class="card-title">Live Diagnostic Panel</h3>
-                <ul id="diagnostic-results" class="diagnostic-list">
-                    <!-- Les résultats du diagnostic seront injectés ici -->
-                </ul>
-                <button id="btn-run-diagnostics" class="btn btn-primary">Lancer le Diagnostic</button>
-            </div>
+            <div class="card"><h3 class="card-title">Analyse des Données</h3><p>Vérifie la cohérence des données (doublons, contraintes, quotas) avant la génération.</p><button id="btn-run-diagnostics" class="btn">Lancer le Diagnostic</button></div>
         </div>
-        <!-- Phase 3: Génération -->
-        <div id="phase-3" class="wizard-content">
+        <div id="phase-3" class="wizard-content" role="tabpanel">
             <h2 class="phase-title">Phase 3: Génération</h2>
-            <div class="card">
-                <h3 class="card-title">Création des Classes</h3>
-                <p>Lance l'algorithme de répartition pour créer les onglets ...TEST avec une première version des classes.</p>
-                <button id="btn-run-generation" class="btn btn-primary">Générer les Classes</button>
-            </div>
+            <div class="card"><h3 class="card-title">Création des Classes</h3><p>Lance l'algorithme pour créer une première version des classes dans les onglets ...TEST.</p><button id="btn-run-generation" class="btn">Générer les Classes</button></div>
         </div>
-        <!-- Phase 4: Optimisation -->
-        <div id="phase-4" class="wizard-content">
+        <div id="phase-4" class="wizard-content" role="tabpanel">
             <h2 class="phase-title">Phase 4: Optimisation</h2>
-            <div class="card">
-                <h3 class="card-title">Équilibrage Automatique</h3>
-                <p>Applique l'algorithme "JULES-VERNE-NAUTILUS" pour optimiser l'équilibre des classes en fonction des scores et de la parité.</p>
-                <button id="btn-run-optimization" class="btn btn-primary">Lancer l'Optimisation</button>
-            </div>
+            <div class="card"><h3 class="card-title">Équilibrage Automatique</h3><p>Applique l'algorithme "JULES-VERNE-NAUTILUS" pour optimiser l'équilibre des classes.</p><button id="btn-run-optimization" class="btn">Lancer l'Optimisation</button></div>
         </div>
-        <!-- Phase 5: Swaps Manuels -->
-        <div id="phase-5" class="wizard-content">
+        <div id="phase-5" class="wizard-content" role="tabpanel">
             <h2 class="phase-title">Phase 5: Swaps Manuels</h2>
-            <div class="card">
-                <h3 class="card-title">Ajustements Fins</h3>
-                <p>Ouvre l'Interface V2 dans un nouvel onglet pour effectuer des échanges manuels d'élèves. Les classes ...TEST seront chargées automatiquement.</p>
-                <button id="btn-open-swap-interface" class="btn btn-primary">Ouvrir l'Interface de Swap</button>
-            </div>
+            <div class="card"><h3 class="card-title">Ajustements Fins</h3><p>Ouvre l'Interface V2 pour effectuer des échanges manuels d'élèves. Les classes ...TEST seront chargées.</p><button id="btn-open-swap-interface" class="btn">Ouvrir l'Interface de Swap</button></div>
         </div>
-        <!-- Phase 6: Finalisation -->
-        <div id="phase-6" class="wizard-content">
+        <div id="phase-6" class="wizard-content" role="tabpanel">
             <h2 class="phase-title">Phase 6: Finalisation</h2>
-            <div class="card">
-                <h3 class="card-title">Action Finale</h3>
-                <p>Cette action va copier les résultats des onglets ...TEST vers des onglets définitifs ...DEF. Cette opération est irréversible.</p>
-                <button id="btn-finalize-process" class="btn btn-primary">Finaliser le Processus</button>
-            </div>
+            <div class="card"><h3 class="card-title">Action Finale</h3><p>Copie les résultats des onglets ...TEST vers des onglets définitifs ...DEF. Cette opération est irréversible.</p><button id="btn-finalize-process" class="btn">Finaliser le Processus</button></div>
         </div>
-    </div>
-<script>
-    document.addEventListener('DOMContentLoaded', () => {
-        const navItems = document.querySelectorAll('.nav-item');
-        const contentPanels = document.querySelectorAll('.wizard-content');
+    </main>
 
-        function updateStepStatus(step, status, text) {
-            const badge = document.getElementById(`badge-${step}`);
-            if (badge) {
-                badge.className = 'nav-badge'; // Reset classes
-                badge.classList.add(`status-${status}`);
-                badge.textContent = text;
-            }
-        }
+    <aside class="diagnostic-panel">
+        <div class="panel-header"><h3>Diagnostic en Temps Réel</h3></div>
+        <div class="panel-content"><div class="diagnostic-checklist"><h4>Checklist de Validation</h4><ul id="live-diagnostic-results"></ul></div></div>
+    </aside>
+</div>
 
-        function updateNavLockState() {
-            let enabledUpTo = 0;
-            navItems.forEach(item => {
-                const step = parseInt(item.getAttribute('data-step'), 10);
-                const badge = document.getElementById(`badge-${step}`);
-                if (badge && badge.classList.contains('status-success')) {
-                    enabledUpTo = Math.max(enabledUpTo, step);
-                }
-            });
-
-            navItems.forEach(item => {
-                const step = parseInt(item.getAttribute('data-step'), 10);
-                if (step > enabledUpTo + 1) {
-                    item.classList.add('disabled');
-                } else {
-                    item.classList.remove('disabled');
-                }
-            });
-        }
-
-        navItems.forEach(item => {
-            item.addEventListener('click', e => {
-                e.preventDefault();
-                if (item.classList.contains('disabled')) return;
-
-                const targetStep = item.getAttribute('data-step');
-
-                // Update navigation
-                navItems.forEach(i => i.classList.remove('active'));
-                item.classList.add('active');
-
-                // Update content
-                contentPanels.forEach(panel => {
-                    if (panel.id === `phase-${targetStep}`) {
-                        panel.classList.add('active');
-                    } else {
-                        panel.classList.remove('active');
-                    }
-                });
-            });
-        });
-
-        const reviewModal = document.getElementById('reviewModal');
-        const checklistContainer = document.getElementById('checklist-container');
-        const confirmFinalizeBtn = document.getElementById('btn-confirm-finalize');
-        const cancelFinalizeBtn = document.getElementById('btn-cancel-finalize');
-        const closeModalBtn = document.getElementById('btn-close-modal');
-        const confirmCheckbox = document.getElementById('confirm-checklist');
-
-        confirmCheckbox.addEventListener('change', () => {
-            confirmFinalizeBtn.disabled = !confirmCheckbox.checked;
-        });
-
-        window.openReviewModal = function(diagnosticResults) {
-            // Reset state
-            confirmCheckbox.checked = false;
-            confirmFinalizeBtn.disabled = true;
-            checklistContainer.innerHTML = '';
-
-            // Populate checklist
-            diagnosticResults.forEach(item => {
-                const itemEl = document.createElement('li');
-                itemEl.className = 'checklist-item';
-                let icon = '';
-                if (item.status === 'ok') {
-                    icon = '<div class="icon-container-ok">✅</div>';
-                    itemEl.classList.add('status-ok');
-                } else if (item.status === 'warning') {
-                    icon = '<div class="icon-container-warning">⚠️</div>';
-                    itemEl.classList.add('status-warning');
-                } else {
-                    icon = '<div class="icon-container-error">❌</div>';
-                    itemEl.classList.add('status-error');
-                }
-                itemEl.innerHTML = `${icon}<span>${item.message}</span>`;
-                checklistContainer.appendChild(itemEl);
-            });
-
-            // Show the modal
-            reviewModal.classList.remove('hidden');
-        }
-
-        function closeReviewModal() {
-            reviewModal.classList.add('hidden');
-        }
-
-        document.getElementById('btn-finalize-process').addEventListener('click', () => {
-            updateStepStatus(6, 'pending', 'Vérification');
-            google.script.run
-                .withSuccessHandler(openReviewModal)
-                .withFailureHandler(error => {
-                    alert('Erreur du service de diagnostic: ' + error.message);
-                    updateStepStatus(6, 'error', 'Erreur');
-                })
-                .runGlobalDiagnostics();
-        });
-
-        confirmFinalizeBtn.addEventListener('click', () => {
-            updateStepStatus(6, 'pending', 'En cours');
-            closeReviewModal();
-            google.script.run
-                .withSuccessHandler(response => {
-                    alert(response.message);
-                    updateStepStatus(6, 'success', 'Terminé');
-                    updateNavLockState();
-                })
-                .withFailureHandler(error => {
-                    alert("Erreur de finalisation: " + error.message);
-                    updateStepStatus(6, 'error', 'Erreur');
-                })
-                .finalizeProcess();
-        });
-
-        cancelFinalizeBtn.addEventListener('click', closeReviewModal);
-        closeModalBtn.addEventListener('click', closeReviewModal);
-
-        // --- Live Diagnostic Panel ---
-        const runDiagnosticsBtn = document.getElementById('btn-run-diagnostics');
-        const diagnosticResultsContainer = document.getElementById('diagnostic-results');
-
-        function displayDiagnostics(results) {
-            diagnosticResultsContainer.innerHTML = ''; // Clear previous results
-            results.forEach(item => {
-                const li = document.createElement('li');
-                li.className = `diagnostic-item status-${item.status}`;
-                li.innerHTML = `<span class="diagnostic-icon">${item.status === 'ok' ? '✅' : (item.status === 'warning' ? '⚠️' : '❌')}</span> <span class="diagnostic-message">${item.message}</span>`;
-                diagnosticResultsContainer.appendChild(li);
-            });
-        }
-
-        runDiagnosticsBtn.addEventListener('click', () => {
-            updateStepStatus(2, 'pending', 'En cours');
-            diagnosticResultsContainer.innerHTML = '<li class="diagnostic-item status-pending">Diagnostic en cours...</li>';
-            google.script.run
-                .withSuccessHandler(results => {
-                    displayDiagnostics(results);
-                    const hasErrors = results.some(r => r.status === 'error');
-                    updateStepStatus(2, hasErrors ? 'error' : 'success', hasErrors ? 'Erreur' : 'Terminé');
-                    if (!hasErrors) {
-                        updateNavLockState();
-                    }
-                })
-                .withFailureHandler(error => {
-                    diagnosticResultsContainer.innerHTML = `<li class="diagnostic-item status-error">Erreur: ${error.message}</li>`;
-                    updateStepStatus(2, 'error', 'Erreur');
-                })
-                .runGlobalDiagnostics();
-        });
-
-        // --- Bridge to Interface V2 ---
-        document.getElementById('btn-open-swap-interface').addEventListener('click', () => {
-            updateStepStatus(5, 'pending', 'En cours');
-            google.script.run
-                .withSuccessHandler(() => {
-                    // Open InterfaceV2 in a new tab. The URL will be the script's URL.
-                    window.open(google.script.host.origin + google.script.host.path, '_blank');
-                    updateStepStatus(5, 'success', 'Terminé');
-                    updateNavLockState();
-                })
-                .withFailureHandler(error => {
-                    alert("Erreur lors de la création du pont: " + error.message);
-                    updateStepStatus(5, 'error', 'Erreur');
-                })
-                .setBridgeContext('TEST', ''); // We want to load the ...TEST sheets
-        });
-
-        // --- Phase 1: Initialisation ---
-        document.getElementById('btn-run-initialisation').addEventListener('click', () => {
-            updateStepStatus(1, 'pending', 'En cours');
-            google.script.run
-                .withSuccessHandler(() => {
-                    updateStepStatus(1, 'success', 'Lancé');
-                    updateNavLockState();
-                })
-                .withFailureHandler(error => {
-                    alert("Erreur lors de l'ouverture de l'initialisation: " + error.message);
-                    updateStepStatus(1, 'error', 'Erreur');
-                })
-                .ouvrirInitialisation();
-        });
-
-        // --- Phase 3: Génération ---
-        document.getElementById('btn-run-generation').addEventListener('click', () => {
-            updateStepStatus(3, 'pending', 'En cours');
-            google.script.run
-                .withSuccessHandler(() => {
-                    updateStepStatus(3, 'success', 'Terminé');
-                    updateNavLockState();
-                })
-                .withFailureHandler(error => {
-                    alert("Erreur lors de la génération des classes: " + error.message);
-                    updateStepStatus(3, 'error', 'Erreur');
-                })
-                .legacy_runFullPipeline();
-        });
-
-        // --- Phase 4: Optimisation ---
-        document.getElementById('btn-run-optimization').addEventListener('click', () => {
-            updateStepStatus(4, 'pending', 'En cours');
-            google.script.run
-                .withSuccessHandler(() => {
-                    updateStepStatus(4, 'success', 'Lancé');
-                    updateNavLockState();
-                })
-                .withFailureHandler(error => {
-                    alert("Erreur lors de l'ouverture du panneau d'optimisation: " + error.message);
-                    updateStepStatus(4, 'error', 'Erreur');
-                })
-                .showOptimizationPanel();
-        });
-
-        updateNavLockState(); // Initial lock state
-    });
-</script>
-
-<!-- Modal de Révision -->
+<!-- Modal -->
 <div id="reviewModal" class="modal hidden">
     <div class="modal-content">
         <div class="modal-header">
@@ -452,20 +322,212 @@
         </div>
         <div class="modal-body">
             <p>Veuillez vérifier les diagnostics suivants avant de continuer. Cette action est irréversible.</p>
-            <ul id="checklist-container" class="checklist">
-                <!-- Les éléments de la checklist seront injectés ici par JavaScript -->
-            </ul>
+            <ul id="checklist-container" class="checklist"></ul>
         </div>
         <div class="modal-footer">
-            <label class="confirm-checkbox-label">
-                <input type="checkbox" id="confirm-checklist">
-                Je confirme avoir lu et compris les avertissements.
-            </label>
+            <label class="confirm-checkbox-label"><input type="checkbox" id="confirm-checklist"> Je confirme avoir lu et compris.</label>
             <button id="btn-cancel-finalize" class="btn btn-secondary">Annuler</button>
-            <button id="btn-confirm-finalize" class="btn btn-primary" disabled>Confirmer et Finaliser</button>
+            <button id="btn-confirm-finalize" class="btn" disabled>Confirmer et Finaliser</button>
         </div>
     </div>
 </div>
 
+<div id="toast-container"></div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const state = {
+        currentStep: 1,
+        steps: { 1: 'pending', 2: 'todo', 3: 'todo', 4: 'todo', 5: 'todo', 6: 'todo' }
+    };
+
+    const navItems = document.querySelectorAll('.nav-item');
+    const contentPanels = document.querySelectorAll('.wizard-content');
+    const darkModeSwitch = document.getElementById('dark-mode-switch');
+
+    const showToast = (message, type = 'info') => {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.innerHTML = `<span class="material-icons">${type === 'success' ? 'check_circle' : (type === 'error' ? 'error' : 'info')}</span><span>${message}</span>`;
+        container.appendChild(toast);
+        setTimeout(() => toast.remove(), 5000);
+    };
+
+    const updateStepStatus = (step, status, text) => {
+        state.steps[step] = status;
+        const badge = document.getElementById(`badge-${step}`);
+        if (badge) {
+            badge.className = `nav-badge status-${status}`;
+            badge.textContent = text;
+        }
+        updateNavLockState();
+    };
+
+    const updateNavLockState = () => {
+        let lastSuccess = 0;
+        for (let i = 1; i <= 6; i++) {
+            if (state.steps[i] === 'success') lastSuccess = i;
+            else break;
+        }
+
+        navItems.forEach(item => {
+            const step = parseInt(item.dataset.step, 10);
+            if (step > lastSuccess + 1) item.classList.add('disabled');
+            else item.classList.remove('disabled');
+        });
+    };
+
+    const setActiveStep = (step) => {
+        state.currentStep = step;
+        navItems.forEach(i => {
+            const s = parseInt(i.dataset.step, 10);
+            i.classList.toggle('active', s === step);
+            i.setAttribute('aria-selected', s === step);
+        });
+        contentPanels.forEach(p => {
+            p.classList.toggle('active', p.id === `phase-${step}`);
+        });
+    };
+
+    const runBackend = (action, { step, pendingText, successText, errorText, handler }) => {
+        updateStepStatus(step, 'pending', pendingText);
+        google.script.run
+            .withSuccessHandler(response => {
+                if (handler) handler(response);
+                else {
+                    showToast(successText, 'success');
+                    updateStepStatus(step, 'success', 'Terminé');
+                    if (step < 6) setActiveStep(step + 1);
+                }
+            })
+            .withFailureHandler(error => {
+                showToast(error.message, 'error');
+                updateStepStatus(step, 'error', 'Erreur');
+            })[action]();
+    };
+
+    navItems.forEach(item => {
+        item.addEventListener('click', e => {
+            e.preventDefault();
+            if (item.classList.contains('disabled')) return;
+            setActiveStep(parseInt(item.dataset.step, 10));
+        });
+    });
+
+    document.getElementById('btn-run-initialisation').addEventListener('click', () => {
+        runBackend('ouvrirInitialisation', {
+            step: 1, pendingText: 'En cours', successText: "Système initialisé.", errorText: "Erreur d'initialisation."
+        });
+    });
+
+    document.getElementById('btn-run-diagnostics').addEventListener('click', () => {
+        runBackend('runGlobalDiagnostics', {
+            step: 2, pendingText: 'En cours', errorText: "Erreur du diagnostic.",
+            handler: (results) => {
+                const hasErrors = results.some(r => r.status === 'error');
+                showToast(hasErrors ? "Le diagnostic a trouvé des erreurs." : "Diagnostic terminé sans erreur.", hasErrors ? 'error' : 'success');
+                updateStepStatus(2, hasErrors ? 'error' : 'Erreurs', 'Terminé');
+                if (!hasErrors) {
+                    updateStepStatus(2, 'success', 'Terminé');
+                    setActiveStep(3);
+                }
+            }
+        });
+    });
+
+    document.getElementById('btn-run-generation').addEventListener('click', () => {
+        runBackend('legacy_runFullPipeline', {
+            step: 3, pendingText: 'En cours', successText: 'Génération des classes terminée.', errorText: "Erreur de génération."
+        });
+    });
+
+    document.getElementById('btn-run-optimization').addEventListener('click', () => {
+        runBackend('showOptimizationPanel', {
+            step: 4, pendingText: 'En cours', successText: 'Panneau d\'optimisation ouvert.', errorText: "Erreur d'ouverture."
+        });
+    });
+
+    document.getElementById('btn-open-swap-interface').addEventListener('click', () => {
+        runBackend('setBridgeContext', {
+            step: 5, pendingText: 'En cours', successText: "Interface de swap prête.", errorText: "Erreur du pont.",
+            handler: () => {
+                 window.open(google.script.host.origin + google.script.host.path, '_blank');
+                 updateStepStatus(5, 'success', 'Lancé');
+                 setActiveStep(6);
+            }
+        }, ['TEST', '']);
+    });
+
+    // Finalization Modal Logic
+    const reviewModal = document.getElementById('reviewModal');
+    const checklistContainer = document.getElementById('checklist-container');
+    const confirmFinalizeBtn = document.getElementById('btn-confirm-finalize');
+
+    const openReviewModal = (diagnosticResults) => {
+        checklistContainer.innerHTML = diagnosticResults.map(item =>
+            `<li class="checklist-item status-${item.status}">
+                <span class="material-icons">${item.status === 'ok' ? 'check_circle' : (item.status === 'warning' ? 'warning' : 'error')}</span>
+                <span>${item.message}</span>
+            </li>`
+        ).join('');
+        reviewModal.classList.remove('hidden');
+    };
+
+    const closeReviewModal = () => reviewModal.classList.add('hidden');
+
+    document.getElementById('btn-finalize-process').addEventListener('click', () => {
+        runBackend('runGlobalDiagnostics', { step: 6, pendingText: 'Vérification', errorText: "Erreur du service de diagnostic.", handler: openReviewModal });
+    });
+
+    document.getElementById('confirm-checklist').addEventListener('change', (e) => {
+        confirmFinalizeBtn.disabled = !e.target.checked;
+    });
+
+    confirmFinalizeBtn.addEventListener('click', () => {
+        closeReviewModal();
+        runBackend('finalizeProcess', {
+            step: 6, pendingText: 'En cours', successText: "Processus finalisé avec succès.", errorText: "Erreur de finalisation."
+        });
+    });
+
+    document.getElementById('btn-cancel-finalize').addEventListener('click', closeReviewModal);
+    document.getElementById('btn-close-modal').addEventListener('click', closeReviewModal);
+
+    // Live Diagnostic
+    const liveDiagnosticResults = document.getElementById('live-diagnostic-results');
+    const updateLiveDiagnostics = () => {
+        google.script.run
+            .withSuccessHandler(results => {
+                liveDiagnosticResults.innerHTML = results.map(item =>
+                    `<li class="diagnostic-item status-${item.status}">
+                        <span class="diagnostic-icon">${item.status === 'ok' ? '✅' : (item.status === 'warning' ? '⚠️' : '❌')}</span>
+                        <span class="diagnostic-message">${item.message}</span>
+                    </li>`
+                ).join('');
+            })
+            .withFailureHandler(error => {
+                liveDiagnosticResults.innerHTML = `<li class="diagnostic-item status-error">❌ ${error.message}</li>`;
+            })
+            .runGlobalDiagnostics();
+    };
+
+    // Dark Mode
+    const setTheme = (isDark) => {
+        document.body.classList.toggle('dark-mode', isDark);
+        darkModeSwitch.checked = isDark;
+        localStorage.setItem('theme', isDark ? 'dark' : 'light');
+    };
+
+    darkModeSwitch.addEventListener('change', () => setTheme(darkModeSwitch.checked));
+
+    // Initial Load
+    const savedTheme = localStorage.getItem('theme');
+    setTheme(savedTheme ? savedTheme === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches);
+    updateNavLockState();
+    updateLiveDiagnostics();
+    setInterval(updateLiveDiagnostics, 30000); // Refresh every 30 seconds
+});
+</script>
 </body>
 </html>

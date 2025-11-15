@@ -2485,7 +2485,131 @@
             });
 
             console.log('✅ Console de Pilotage V3 Expert Edition chargée !');
+
+            // ===================================================================
+            // SYSTÈME DE MINIMISATION - GESTION
+            // ===================================================================
+            const consoleToggleBtn = document.getElementById('consoleToggleBtn');
+            const minimizedCurrentPhase = document.getElementById('minimized-current-phase');
+            const minimizedCurrentStatus = document.getElementById('minimized-current-status');
+            const minimizedProgressCircle = document.getElementById('minimizedProgressCircle');
+            const minimizedProgressText = document.getElementById('minimizedProgressText');
+
+            let isConsoleMinimized = localStorage.getItem('consoleMinimized') === 'true';
+
+            // Appliquer l'état initial au chargement
+            if (isConsoleMinimized) {
+                document.body.classList.add('console-minimized');
+                updateMinimizedBar();
+            }
+
+            // Fonction pour mettre à jour la barre minimale
+            function updateMinimizedBar() {
+                const currentPhaseNum = appState.currentPhase;
+                const currentPhase = appState.phases[currentPhaseNum];
+
+                // Mettre à jour la phase actuelle
+                minimizedCurrentPhase.textContent = `Phase ${currentPhaseNum}`;
+
+                // Mettre à jour le statut
+                const statusText = {
+                    'active': 'En cours',
+                    'pending': 'En attente',
+                    'completed': 'Terminé',
+                    'error': 'Erreur'
+                };
+                minimizedCurrentStatus.textContent = statusText[currentPhase.status] || 'En attente';
+
+                // Calculer et mettre à jour la progression
+                const completedPhases = Object.values(appState.phases).filter(p => p.completed).length;
+                const totalPhases = 6;
+                const percentage = Math.round((completedPhases / totalPhases) * 100);
+                const angle = (percentage / 100) * 360;
+
+                minimizedProgressCircle.style.setProperty('--progress-angle', `${angle}deg`);
+                minimizedProgressText.textContent = `${percentage}%`;
+            }
+
+            // Fonction toggle
+            function toggleConsole() {
+                isConsoleMinimized = !isConsoleMinimized;
+                document.body.classList.toggle('console-minimized');
+                localStorage.setItem('consoleMinimized', isConsoleMinimized);
+
+                if (isConsoleMinimized) {
+                    updateMinimizedBar();
+                    showToast('info', 'Console minimisée. Les onglets Google Sheets sont maintenant accessibles.');
+                } else {
+                    showToast('success', 'Console restaurée.');
+                }
+            }
+
+            // Événement du bouton toggle
+            consoleToggleBtn.addEventListener('click', toggleConsole);
+
+            // Raccourci clavier : Ctrl + M (ou Cmd + M sur Mac)
+            document.addEventListener('keydown', (e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key === 'm') {
+                    e.preventDefault();
+                    toggleConsole();
+                }
+            });
+
+            // Override updatePhaseStatus pour mettre à jour la barre minimale
+            const originalUpdatePhaseStatus = updatePhaseStatus;
+            updatePhaseStatus = function(phaseNum, status) {
+                originalUpdatePhaseStatus(phaseNum, status);
+                if (isConsoleMinimized) {
+                    updateMinimizedBar();
+                }
+            };
+
+            // Override goToPhase pour mettre à jour la barre minimale
+            const originalGoToPhase = goToPhase;
+            goToPhase = function(phaseNum) {
+                originalGoToPhase(phaseNum);
+                if (isConsoleMinimized) {
+                    updateMinimizedBar();
+                }
+            };
+
+            // Initialiser la barre minimale
+            updateMinimizedBar();
         });
     </script>
+
+    <!-- =====================================================================
+     * BOUTON TOGGLE FLOTTANT
+     * ===================================================================-->
+    <button class="console-toggle-btn" id="consoleToggleBtn" title="Minimiser/Maximiser la console (Ctrl+M)">
+        <i class="fas fa-chevron-down"></i>
+    </button>
+
+    <!-- =====================================================================
+     * BARRE MINIMALE
+     * ===================================================================-->
+    <div class="console-minimized-bar">
+        <div class="minimized-bar-content">
+            <div class="minimized-bar-logo">
+                <i class="fas fa-rocket"></i>
+                <span class="minimized-bar-title">Console V3 Expert</span>
+            </div>
+            <div class="minimized-bar-status">
+                <div class="minimized-status-item">
+                    <i class="fas fa-layer-group"></i>
+                    <span id="minimized-current-phase">Phase 1</span>
+                </div>
+                <div class="minimized-status-item">
+                    <i class="fas fa-info-circle"></i>
+                    <span id="minimized-current-status">En attente</span>
+                </div>
+            </div>
+            <div class="minimized-bar-progress">
+                <div class="minimized-progress-circle" id="minimizedProgressCircle">
+                    <span class="minimized-progress-text" id="minimizedProgressText">0%</span>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
