@@ -11,7 +11,8 @@ function onOpen() {
 
     // ========== NOUVEAU MENU CONSOLE ==========
     ui.createMenu('🎯 CONSOLE')
-      .addItem('🚀 Console de Pilotage V2', 'showPilotageConsole')
+      .addItem('🚀 Console de Pilotage V3 (EXPERT)', 'ouvrirConsolePilotageV3')
+      .addItem('📊 Console de Pilotage V2', 'showPilotageConsole')
       .addSeparator()
       .addItem('🏗️ Initialiser Système', 'ouvrirInitialisation')
       .addItem('🆔 Générer NOM_PRENOM & ID', 'genererNomPrenomEtID')
