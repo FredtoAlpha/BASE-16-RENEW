@@ -69,7 +69,7 @@ function showPilotageConsole() {
     Logger.log('Console de Pilotage V4 affichée avec succès en mode NON-BLOQUANT.');
   } catch (error) {
     Logger.log('ERREUR dans showPilotageConsole: ' + error.toString());
-    SpreadsheetApp.getUi().alert('Erreur lors de l'ouverture de la console: ' + error.toString());
+    SpreadsheetApp.getUi().alert('Erreur lors de l\'ouverture de la console: ' + error.toString());
   }
 }
 
