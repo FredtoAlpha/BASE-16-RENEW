@@ -2387,6 +2387,44 @@ function resizeCards(){
 // Fonction déjà définie plus haut
 
 // =======================================================
+// PONT INTELLIGENT AVEC LA CONSOLE DE PILOTAGE
+// ======================================================
+async function initializeBridge() {
+  try {
+    console.log('🌉 Initialisation du pont depuis la Console de Pilotage...');
+    // Cette fonction côté serveur lit la propriété utilisateur 'JULES_CONTEXT' et la supprime.
+    const result = await gsRun('getBridgeContextAndClear');
+
+    if (result && result.success && result.context && result.context.mode) {
+      const mode = result.context.mode;
+      const sourceSheet = result.context.sourceSheetName || 'source';
+
+      console.log(`📡 Contexte reçu: Mode=${mode}, Source=${sourceSheet}`);
+
+      localStorage.setItem('mode-selection', mode);
+      console.log(`✅ Mode "${mode}" défini depuis le contexte.`);
+      toast(`Contexte chargé depuis la console (Mode: ${mode})`, 'success');
+
+      // Cacher le modal de démarrage et lancer l'application
+      const startupModal = document.getElementById('startupModal');
+      if (startupModal) {
+        startupModal.classList.add('hidden');
+      }
+      // On a un mode, on peut lancer l'app directement
+      await initRepartitionApp();
+
+    } else {
+      console.log('🤷 Aucun contexte trouvé ou mode manquant, ouverture du modal de démarrage.');
+      openStartupModal();
+    }
+  } catch (error) {
+    console.error('Erreur du pont intelligent:', error);
+    toast('Erreur de communication avec la console', 'error');
+    openStartupModal(); // Fallback en cas d'erreur
+  }
+}
+
+// =======================================================
 // INITIALISATION QUAND LE DOM EST PRÊT
 // =======================================================
 window.addEventListener('DOMContentLoaded', (event) => {
@@ -6264,7 +6302,7 @@ window.gsRun = gsRun;
   
   // CORRECTION : TOUJOURS afficher le modal au démarrage
   // L'utilisateur doit pouvoir choisir à chaque fois
-  openStartupModal();
+  initializeBridge();
 
   // Gestion des menus déroulants fixes au clic
   (function() {
