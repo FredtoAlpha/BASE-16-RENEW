@@ -226,6 +226,168 @@
         .diagnostic-icon { margin-right: 10px; }
         .confirm-checkbox-label { display: flex; align-items: center; font-size: 12px; color: var(--text-secondary); margin-right: auto; }
         #confirm-checklist { margin-right: 8px; }
+
+        /* =====================================================================
+         * CONSOLE TOGGLE - Minimiser/Maximiser
+         * ===================================================================*/
+        .console-toggle-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 56px;
+            height: 56px;
+            background: linear-gradient(135deg, var(--accent-color), #764ba2);
+            border-radius: 50%;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 4px 20px rgba(66, 153, 225, 0.5);
+            z-index: 9999;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .console-toggle-btn:hover {
+            transform: scale(1.1) rotate(5deg);
+            box-shadow: 0 6px 30px rgba(66, 153, 225, 0.7);
+        }
+
+        .console-toggle-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* État minimisé de la console */
+        body.console-minimized .app-container {
+            transform: translateY(calc(100vh - 80px));
+            transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        body.console-minimized .console-toggle-btn .material-icons {
+            transform: rotate(180deg);
+        }
+
+        /* Barre minimale en bas */
+        .console-minimized-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 80px;
+            background: linear-gradient(135deg, rgba(26, 32, 44, 0.98), rgba(45, 55, 72, 0.98));
+            backdrop-filter: blur(24px);
+            border-top: 2px solid var(--accent-color);
+            z-index: 9998;
+            display: none;
+            align-items: center;
+            padding: 0 30px;
+            box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+            animation: slideUpBar 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        body.console-minimized .console-minimized-bar {
+            display: flex;
+        }
+
+        @keyframes slideUpBar {
+            from {
+                transform: translateY(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .minimized-bar-content {
+            display: flex;
+            align-items: center;
+            gap: 30px;
+            width: 100%;
+        }
+
+        .minimized-bar-logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .minimized-bar-logo .material-icons {
+            font-size: 32px;
+            color: var(--accent-color);
+        }
+
+        .minimized-bar-title {
+            color: white;
+            font-size: 16px;
+            font-weight: 700;
+        }
+
+        .minimized-bar-status {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex: 1;
+            padding: 0 30px;
+        }
+
+        .minimized-status-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            color: white;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .minimized-status-item .material-icons {
+            font-size: 18px;
+            color: var(--accent-color);
+        }
+
+        .minimized-bar-progress {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .minimized-progress-circle {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: conic-gradient(
+                var(--accent-color) 0deg,
+                var(--accent-color) var(--progress-angle, 0deg),
+                rgba(255, 255, 255, 0.1) var(--progress-angle, 0deg)
+            );
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .minimized-progress-circle::before {
+            content: '';
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            background: var(--sidebar-bg);
+            position: absolute;
+        }
+
+        .minimized-progress-text {
+            position: relative;
+            z-index: 1;
+            color: white;
+            font-size: 12px;
+            font-weight: 700;
+        }
     </style>
 </head>
 <body>
@@ -333,6 +495,36 @@
 </div>
 
 <div id="toast-container"></div>
+
+<!-- Bouton Toggle Flottant -->
+<button class="console-toggle-btn" id="consoleToggleBtn" title="Minimiser/Maximiser la console">
+    <span class="material-icons">expand_more</span>
+</button>
+
+<!-- Barre Minimale -->
+<div class="console-minimized-bar">
+    <div class="minimized-bar-content">
+        <div class="minimized-bar-logo">
+            <span class="material-icons">dashboard</span>
+            <span class="minimized-bar-title">Console V4</span>
+        </div>
+        <div class="minimized-bar-status">
+            <div class="minimized-status-item">
+                <span class="material-icons">layers</span>
+                <span id="minimized-current-phase">Phase 1</span>
+            </div>
+            <div class="minimized-status-item">
+                <span class="material-icons">info</span>
+                <span id="minimized-current-status">En attente</span>
+            </div>
+        </div>
+        <div class="minimized-bar-progress">
+            <div class="minimized-progress-circle" id="minimizedProgressCircle">
+                <span class="minimized-progress-text" id="minimizedProgressText">0%</span>
+            </div>
+        </div>
+    </div>
+</div>
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
@@ -527,6 +719,94 @@ document.addEventListener('DOMContentLoaded', () => {
     updateNavLockState();
     updateLiveDiagnostics();
     setInterval(updateLiveDiagnostics, 30000); // Refresh every 30 seconds
+
+    // ===================================================================
+    // CONSOLE TOGGLE - Minimiser/Maximiser
+    // ===================================================================
+    const consoleToggleBtn = document.getElementById('consoleToggleBtn');
+    const minimizedCurrentPhase = document.getElementById('minimized-current-phase');
+    const minimizedCurrentStatus = document.getElementById('minimized-current-status');
+    const minimizedProgressCircle = document.getElementById('minimizedProgressCircle');
+    const minimizedProgressText = document.getElementById('minimizedProgressText');
+
+    let isConsoleMinimized = localStorage.getItem('consoleMinimized') === 'true';
+
+    // Appliquer l'état initial
+    if (isConsoleMinimized) {
+        document.body.classList.add('console-minimized');
+    }
+
+    // Fonction pour mettre à jour la barre minimale
+    const updateMinimizedBar = () => {
+        const currentStepNum = state.currentStep;
+        const currentStatus = state.steps[currentStepNum];
+
+        // Mettre à jour la phase actuelle
+        minimizedCurrentPhase.textContent = `Phase ${currentStepNum}`;
+
+        // Mettre à jour le statut
+        const statusText = {
+            'pending': 'En cours',
+            'todo': 'En attente',
+            'success': 'Terminé',
+            'error': 'Erreur'
+        };
+        minimizedCurrentStatus.textContent = statusText[currentStatus] || 'En attente';
+
+        // Calculer et mettre à jour la progression
+        const completedSteps = Object.values(state.steps).filter(s => s === 'success').length;
+        const totalSteps = 6;
+        const percentage = Math.round((completedSteps / totalSteps) * 100);
+        const angle = (percentage / 100) * 360;
+
+        minimizedProgressCircle.style.setProperty('--progress-angle', `${angle}deg`);
+        minimizedProgressText.textContent = `${percentage}%`;
+    };
+
+    // Fonction toggle
+    const toggleConsole = () => {
+        isConsoleMinimized = !isConsoleMinimized;
+        document.body.classList.toggle('console-minimized');
+        localStorage.setItem('consoleMinimized', isConsoleMinimized);
+
+        if (isConsoleMinimized) {
+            updateMinimizedBar();
+            showToast('Console minimisée. Cliquez sur le bouton pour la restaurer.', 'info');
+        } else {
+            showToast('Console restaurée.', 'success');
+        }
+    };
+
+    // Événement du bouton
+    consoleToggleBtn.addEventListener('click', toggleConsole);
+
+    // Raccourci clavier : Ctrl + M (ou Cmd + M sur Mac)
+    document.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'm') {
+            e.preventDefault();
+            toggleConsole();
+        }
+    });
+
+    // Mettre à jour la barre minimale lors des changements d'étape
+    const originalUpdateStepStatus = updateStepStatus;
+    updateStepStatus = (step, status, text) => {
+        originalUpdateStepStatus(step, status, text);
+        if (isConsoleMinimized) {
+            updateMinimizedBar();
+        }
+    };
+
+    const originalSetActiveStep = setActiveStep;
+    setActiveStep = (step) => {
+        originalSetActiveStep(step);
+        if (isConsoleMinimized) {
+            updateMinimizedBar();
+        }
+    };
+
+    // Initialiser la barre minimale
+    updateMinimizedBar();
 });
 </script>
 </body>
