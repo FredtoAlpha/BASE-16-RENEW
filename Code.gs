@@ -13,8 +13,6 @@ function onOpen() {
     ui.createMenu('🎯 CONSOLE')
       .addItem('🚀 Console de Pilotage V2', 'showPilotageConsole')
       .addSeparator()
-      .addItem('🚀 ASSISTANT DE CONFIGURATION (NOUVEAU)', 'ouvrirWizardInterface')
-      .addSeparator()
       .addItem('🏗️ Initialiser Système', 'ouvrirInitialisation')
       .addItem('🆔 Générer NOM_PRENOM & ID', 'genererNomPrenomEtID')
       .addItem('📋 Listes Déroulantes', 'ajouterListesDeroulantes')
@@ -3264,6 +3262,38 @@ function saveGroupsToSheetsV4(groupsData, isTemp) {
     };
   }
 }
+
+/**
+ * Pont intelligent : récupère le contexte depuis PropertiesService et le supprime.
+ * Appelé par InterfaceV2 au chargement pour s'initialiser avec le bon mode.
+ */
+function getBridgeContextAndClear() {
+  try {
+    const userProperties = PropertiesService.getUserProperties();
+    const contextString = userProperties.getProperty('JULES_CONTEXT');
+
+    if (contextString) {
+      // Supprimer la propriété pour qu'elle ne soit utilisée qu'une seule fois
+      userProperties.deleteProperty('JULES_CONTEXT');
+
+      const context = JSON.parse(contextString);
+      console.log('🌉 Contexte de pont récupéré et supprimé:', context);
+
+      return { success: true, context: context };
+    } else {
+      console.log('🌉 Aucun contexte de pont trouvé.');
+      return { success: false, context: null };
+    }
+  } catch (error) {
+    console.error('Erreur dans getBridgeContextAndClear:', error);
+    return { success: false, error: error.toString() };
+  }
+}
+
+/**
+ * Récupère le mot de passe admin depuis la feuille de configuration _CONFIG.
+ * @returns {string|null} Le mot de passe ou null si non trouvé.
+ */
 
 /**
  * Charge les groupes depuis les onglets Google Sheets (VERSION V4)
