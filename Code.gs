@@ -13,6 +13,8 @@ function onOpen() {
     ui.createMenu('🎯 CONSOLE')
       .addItem('🚀 Console de Pilotage V2', 'showPilotageConsole')
       .addSeparator()
+      .addItem('🚀 ASSISTANT DE CONFIGURATION (NOUVEAU)', 'ouvrirWizardInterface')
+      .addSeparator()
       .addItem('🏗️ Initialiser Système', 'ouvrirInitialisation')
       .addItem('🆔 Générer NOM_PRENOM & ID', 'genererNomPrenomEtID')
       .addItem('📋 Listes Déroulantes', 'ajouterListesDeroulantes')
