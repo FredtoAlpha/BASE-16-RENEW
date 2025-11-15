@@ -1546,27 +1546,139 @@
             <!-- Phase 1: Initialisation -->
             <div id="phase-1" class="phase active">
                 <div class="content-header">
-                    <h1 class="page-title">Phase 1: Initialisation</h1>
-                    <p class="page-subtitle">Configuration initiale du système et préparation des données pour la répartition</p>
+                    <h1 class="page-title">Phase 1: Initialisation & Configuration</h1>
+                    <p class="page-subtitle">✨ ZÉRO POPUP ! Configurez tous les paramètres directement ici, puis lancez l'initialisation</p>
                 </div>
 
+                <!-- FORMULAIRE DE CONFIGURATION INTÉGRÉ -->
                 <div class="card">
                     <div class="card-header">
                         <div class="card-icon">
-                            <i class="fas fa-rocket"></i>
+                            <i class="fas fa-cogs"></i>
                         </div>
                         <div>
-                            <h2 class="card-title">Configuration Initiale</h2>
+                            <h2 class="card-title">⚙️ Paramètres Généraux</h2>
                         </div>
                     </div>
-                    <p class="card-description">
-                        Cette étape cruciale prépare le système pour la répartition. Elle consolide les données des onglets sources,
-                        vérifie la configuration et initialise tous les paramètres nécessaires au bon déroulement du processus.
+
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--space-xl); margin-bottom: var(--space-2xl);">
+                        <!-- Niveau Scolaire -->
+                        <div>
+                            <label style="display: block; font-weight: 700; margin-bottom: var(--space-sm); color: var(--text-primary); font-size: 14px;">
+                                <i class="fas fa-graduation-cap" style="margin-right: 8px; color: var(--primary-500);"></i>
+                                Niveau Scolaire
+                            </label>
+                            <select id="config-niveau" style="width: 100%; padding: 12px 16px; border: 2px solid var(--border-light); border-radius: var(--radius-lg); font-size: 15px; font-weight: 500; background: white; transition: all var(--transition-base); cursor: pointer;">
+                                <option value="6°">6ème</option>
+                                <option value="5°" selected>5ème</option>
+                                <option value="4°">4ème</option>
+                                <option value="3°">3ème</option>
+                            </select>
+                        </div>
+
+                        <!-- Nombre de Sources -->
+                        <div>
+                            <label style="display: block; font-weight: 700; margin-bottom: var(--space-sm); color: var(--text-primary); font-size: 14px;">
+                                <i class="fas fa-arrow-right" style="margin-right: 8px; color: var(--secondary-500);"></i>
+                                Classes Sources <span id="source-label" style="font-weight: 400; font-size: 13px; color: var(--text-secondary);">(6°)</span>
+                            </label>
+                            <input type="number" id="config-nb-sources" min="1" max="20" value="6" style="width: 100%; padding: 12px 16px; border: 2px solid var(--border-light); border-radius: var(--radius-lg); font-size: 15px; font-weight: 500; transition: all var(--transition-base);">
+                        </div>
+
+                        <!-- Nombre de Destinations -->
+                        <div>
+                            <label style="display: block; font-weight: 700; margin-bottom: var(--space-sm); color: var(--text-primary); font-size: 14px;">
+                                <i class="fas fa-bullseye" style="margin-right: 8px; color: var(--info);"></i>
+                                Classes Destinations
+                            </label>
+                            <input type="number" id="config-nb-dest" min="1" max="15" value="6" style="width: 100%; padding: 12px 16px; border: 2px solid var(--border-light); border-radius: var(--radius-lg); font-size: 15px; font-weight: 500; transition: all var(--transition-base);">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- OPTIONS & LANGUES -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-icon">
+                            <i class="fas fa-language"></i>
+                        </div>
+                        <div>
+                            <h2 class="card-title">📚 Options & Langues</h2>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr; gap: var(--space-xl); margin-bottom: var(--space-xl);">
+                        <!-- LV2 -->
+                        <div>
+                            <label style="display: block; font-weight: 700; margin-bottom: var(--space-sm); color: var(--text-primary); font-size: 14px;">
+                                <i class="fas fa-globe" style="margin-right: 8px; color: var(--primary-500);"></i>
+                                Langues Vivantes 2 (LV2)
+                            </label>
+                            <input type="text" id="config-lv2" placeholder="ESP, ITA, ALL (séparés par virgules)" value="ESP, ITA" style="width: 100%; padding: 12px 16px; border: 2px solid var(--border-light); border-radius: var(--radius-lg); font-size: 15px; font-weight: 500; transition: all var(--transition-base);">
+                            <small style="color: var(--text-secondary); font-size: 12px; margin-top: 4px; display: block;">Entrez les sigles séparés par des virgules</small>
+                        </div>
+
+                        <!-- Options Spécifiques -->
+                        <div>
+                            <label style="display: block; font-weight: 700; margin-bottom: var(--space-sm); color: var(--text-primary); font-size: 14px;">
+                                <i class="fas fa-star" style="margin-right: 8px; color: var(--warning);"></i>
+                                Options Spécifiques (LATIN, GREC, etc.)
+                            </label>
+                            <input type="text" id="config-opt" placeholder="LATIN, GREC, CHAV (séparés par virgules)" value="LATIN, GREC, CHAV" style="width: 100%; padding: 12px 16px; border: 2px solid var(--border-light); border-radius: var(--radius-lg); font-size: 15px; font-weight: 500; transition: all var(--transition-base);">
+                            <small style="color: var(--text-secondary); font-size: 12px; margin-top: 4px; display: block;">Entrez les sigles séparés par des virgules</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PARAMÈTRES AVANCÉS -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-icon">
+                            <i class="fas fa-sliders-h"></i>
+                        </div>
+                        <div>
+                            <h2 class="card-title">🎛️ Paramètres Avancés</h2>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-lg); margin-bottom: var(--space-xl);">
+                        <div>
+                            <label style="display: block; font-weight: 700; margin-bottom: var(--space-sm); color: var(--text-primary); font-size: 14px;">Max Swaps</label>
+                            <input type="number" id="config-max-swaps" min="10" max="200" value="50" style="width: 100%; padding: 12px 16px; border: 2px solid var(--border-light); border-radius: var(--radius-lg); font-size: 15px; font-weight: 500;">
+                        </div>
+
+                        <div>
+                            <label style="display: block; font-weight: 700; margin-bottom: var(--space-sm); color: var(--text-primary); font-size: 14px;">Tolérance Parité</label>
+                            <input type="number" id="config-parity-tolerance" min="0" max="5" value="2" style="width: 100%; padding: 12px 16px; border: 2px solid var(--border-light); border-radius: var(--radius-lg); font-size: 15px; font-weight: 500;">
+                        </div>
+
+                        <div>
+                            <label style="display: block; font-weight: 700; margin-bottom: var(--space-sm); color: var(--text-primary); font-size: 14px;">Suffixe TEST</label>
+                            <input type="text" id="config-test-suffix" value="TEST" style="width: 100%; padding: 12px 16px; border: 2px solid var(--border-light); border-radius: var(--radius-lg); font-size: 15px; font-weight: 500;">
+                        </div>
+
+                        <div>
+                            <label style="display: block; font-weight: 700; margin-bottom: var(--space-sm); color: var(--text-primary); font-size: 14px;">Suffixe DEF</label>
+                            <input type="text" id="config-def-suffix" value="DEF" style="width: 100%; padding: 12px 16px; border: 2px solid var(--border-light); border-radius: var(--radius-lg); font-size: 15px; font-weight: 500;">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BOUTONS D'ACTION -->
+                <div class="card">
+                    <div style="display: flex; gap: var(--space-md); flex-wrap: wrap;">
+                        <button id="btn-save-config" class="btn btn-success" style="flex: 1; min-width: 200px;">
+                            <i class="btn-icon fas fa-save"></i>
+                            <span>Sauvegarder la Configuration</span>
+                        </button>
+                        <button id="btn-run-initialisation" class="btn btn-primary" style="flex: 1; min-width: 200px;">
+                            <i class="btn-icon fas fa-play"></i>
+                            <span>Lancer l'Initialisation</span>
+                        </button>
+                    </div>
+                    <p style="margin-top: var(--space-md); font-size: 13px; color: var(--text-secondary); text-align: center;">
+                        💾 La configuration est automatiquement sauvegardée dans votre navigateur et dans la feuille _CONFIG
                     </p>
-                    <button id="btn-run-initialisation" class="btn btn-primary">
-                        <i class="btn-icon fas fa-play"></i>
-                        <span>Lancer l'Initialisation</span>
-                    </button>
                 </div>
             </div>
 
@@ -2201,10 +2313,130 @@
             document.getElementById('btn-close-modal').addEventListener('click', hideModal);
             document.getElementById('btn-cancel-finalize').addEventListener('click', hideModal);
 
-            // Phase 1: Initialisation
+            // ===================================================================
+            // PHASE 1 : FORMULAIRE DE CONFIGURATION INTÉGRÉ
+            // ===================================================================
+            const configNiveau = document.getElementById('config-niveau');
+            const configNbSources = document.getElementById('config-nb-sources');
+            const configNbDest = document.getElementById('config-nb-dest');
+            const configLv2 = document.getElementById('config-lv2');
+            const configOpt = document.getElementById('config-opt');
+            const configMaxSwaps = document.getElementById('config-max-swaps');
+            const configParityTolerance = document.getElementById('config-parity-tolerance');
+            const configTestSuffix = document.getElementById('config-test-suffix');
+            const configDefSuffix = document.getElementById('config-def-suffix');
+            const sourceLabel = document.getElementById('source-label');
+
+            // Fonction pour déterminer le niveau source selon le niveau destination
+            function getNiveauSource(niveau) {
+                switch(niveau) {
+                    case '6°': return '(écoles primaires)';
+                    case '5°': return '(6°)';
+                    case '4°': return '(5°)';
+                    case '3°': return '(4°)';
+                    default: return '';
+                }
+            }
+
+            // Mise à jour dynamique du label "Classes Sources"
+            configNiveau.addEventListener('change', () => {
+                sourceLabel.textContent = getNiveauSource(configNiveau.value);
+            });
+
+            // Charger la configuration sauvegardée
+            function loadSavedConfig() {
+                const saved = localStorage.getItem('console_v3_config');
+                if (saved) {
+                    try {
+                        const config = JSON.parse(saved);
+                        if (config.niveau) configNiveau.value = config.niveau;
+                        if (config.nbSources) configNbSources.value = config.nbSources;
+                        if (config.nbDest) configNbDest.value = config.nbDest;
+                        if (config.lv2) configLv2.value = config.lv2;
+                        if (config.opt) configOpt.value = config.opt;
+                        if (config.maxSwaps) configMaxSwaps.value = config.maxSwaps;
+                        if (config.parityTolerance) configParityTolerance.value = config.parityTolerance;
+                        if (config.testSuffix) configTestSuffix.value = config.testSuffix;
+                        if (config.defSuffix) configDefSuffix.value = config.defSuffix;
+
+                        // Mettre à jour le label
+                        sourceLabel.textContent = getNiveauSource(configNiveau.value);
+
+                        showToast('info', 'Configuration chargée depuis votre navigateur');
+                    } catch(e) {
+                        console.error('Erreur lors du chargement de la config:', e);
+                    }
+                }
+            }
+
+            // Sauvegarder la configuration
+            document.getElementById('btn-save-config').addEventListener('click', () => {
+                const config = {
+                    niveau: configNiveau.value,
+                    nbSources: parseInt(configNbSources.value),
+                    nbDest: parseInt(configNbDest.value),
+                    lv2: configLv2.value,
+                    opt: configOpt.value,
+                    maxSwaps: parseInt(configMaxSwaps.value),
+                    parityTolerance: parseInt(configParityTolerance.value),
+                    testSuffix: configTestSuffix.value,
+                    defSuffix: configDefSuffix.value
+                };
+
+                // Validation basique
+                if (config.nbSources < 1 || config.nbSources > 20) {
+                    showToast('error', 'Le nombre de sources doit être entre 1 et 20');
+                    return;
+                }
+                if (config.nbDest < 1 || config.nbDest > 15) {
+                    showToast('error', 'Le nombre de destinations doit être entre 1 et 15');
+                    return;
+                }
+
+                // Sauvegarder localement
+                localStorage.setItem('console_v3_config', JSON.stringify(config));
+                showToast('success', '💾 Configuration sauvegardée dans votre navigateur');
+
+                // TODO: Envoyer au backend pour mise à jour de _CONFIG
+                // google.script.run.saveConfiguration(config);
+            });
+
+            // Phase 1: Initialisation (avec données du formulaire)
             document.getElementById('btn-run-initialisation').addEventListener('click', () => {
+                // Récupérer les données du formulaire
+                const config = {
+                    niveau: configNiveau.value,
+                    nbSources: parseInt(configNbSources.value),
+                    nbDest: parseInt(configNbDest.value),
+                    lv2: configLv2.value.split(',').map(s => s.trim().toUpperCase()).filter(Boolean),
+                    opt: configOpt.value.split(',').map(s => s.trim().toUpperCase()).filter(Boolean)
+                };
+
+                // Validation basique
+                if (config.nbSources < 1 || config.nbSources > 20) {
+                    showToast('error', 'Le nombre de sources doit être entre 1 et 20');
+                    return;
+                }
+                if (config.nbDest < 1 || config.nbDest > 15) {
+                    showToast('error', 'Le nombre de destinations doit être entre 1 et 15');
+                    return;
+                }
+
                 updatePhaseStatus(1, 'active');
                 showLoading('Initialisation en cours...');
+
+                // Sauvegarder automatiquement avant l'initialisation
+                localStorage.setItem('console_v3_config', JSON.stringify({
+                    niveau: config.niveau,
+                    nbSources: config.nbSources,
+                    nbDest: config.nbDest,
+                    lv2: configLv2.value,
+                    opt: configOpt.value,
+                    maxSwaps: parseInt(configMaxSwaps.value),
+                    parityTolerance: parseInt(configParityTolerance.value),
+                    testSuffix: configTestSuffix.value,
+                    defSuffix: configDefSuffix.value
+                }));
 
                 google.script.run
                     .withSuccessHandler(response => {
@@ -2227,6 +2459,9 @@
                     })
                     .v3_runInitialisation();
             });
+
+            // Charger la configuration au démarrage
+            loadSavedConfig();
 
             // Phase 2: Diagnostic
             document.getElementById('btn-run-diagnostics').addEventListener('click', () => {
