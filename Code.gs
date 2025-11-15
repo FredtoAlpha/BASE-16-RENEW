@@ -35,11 +35,13 @@ function onOpen() {
 
     // Ancien menu "LEGACY"
     legacyToolsSubMenu.addItem('▶️ Créer Onglets TEST (Pipeline Complet)', 'legacy_runFullPipeline');
-     legacyToolsSubMenu.addSubMenu(ui.createMenu('🔧 Phases Individuelles LEGACY')
+    legacyToolsSubMenu.addSubMenu(
+      ui.createMenu('🔧 Phases Individuelles LEGACY')
         .addItem('🎯 Phase 1 - Options & LV2', 'legacy_runPhase1')
         .addItem('🔗 Phase 2 - ASSO/DISSO', 'legacy_runPhase2')
         .addItem('⚖️ Phase 3 - Effectifs & Parité', 'legacy_runPhase3')
-        .addItem('🔄 Phase 4 - Équilibrage Scores', 'legacy_runPhase4'));
+        .addItem('🔄 Phase 4 - Équilibrage Scores', 'legacy_runPhase4')
+    );
 
     menuV4.addSubMenu(legacyToolsSubMenu);
 
