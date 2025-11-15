@@ -1,64 +1,101 @@
+// ... (début du fichier ConsolePilotage_Server.gs) ...
+
 /**
- * ===================================================================
- * 🚀 JULES/INTERCONFIG - CONSOLE DE PILOTAGE (VERSION FINALE CONSOLIDÉE)
- * ===================================================================
+ * Ouvre l'Interface V2 pour les swaps manuels après avoir injecté le contexte.
  */
-function showPilotageConsole() {
-  const html = HtmlService.createHtmlOutputFromFile('ConsolePilotage').setWidth(900).setHeight(750);
-  SpreadsheetApp.getUi().showModalDialog(html, 'Console de Pilotage');
-}
-function setupInitialEnvironment(config) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  for (let i = 1; i <= config.nbSources; i++) createSheetIfNotExists(ss, `ECOLE${i}`, ['ID_ELEVE', 'NOM', 'PRENOM', 'SEXE', 'ASSO', 'DISSO', 'LV2', 'OPT', 'COM', 'TRA', 'PART', 'ABS']);
-  createSheetIfNotExists(ss, 'CONSOLIDATION', ['ID_ELEVE', 'NOM', 'PRENOM', 'SEXE', 'ASSO', 'DISSO', 'SOURCE_SHEET']);
-  const structureHeaders = ['CLASSE_DESTINATION', 'EFFECTIF_CIBLE', 'QUOTA_F', 'QUOTA_G', ...config.lv2.map(l => `QUOTA_${l}`), ...config.options.map(o => `QUOTA_${o}`)];
-  createSheetIfNotExists(ss, '_STRUCTURE', structureHeaders);
-  const configSheet = createSheetIfNotExists(ss, '_CONFIG');
-  configSheet.getRange(1, 1, 5, 2).setValues([
-    ['NIVEAU_SCOLAIRE', config.niveau], ['LV2_DISPONIBLES', config.lv2.join(',')],
-    ['OPTIONS_DISPONIBLES', config.options.join(',')], ['NB_CLASSES_SOURCES', config.nbSources],
-    ['NB_CLASSES_DESTINATIONS', config.nbDestinations]
-  ]);
-  return { message: `${config.nbSources} onglets sources et de configuration créés.` };
-}
-function runIdAndNameGeneration() { genererNomPrenomEtID(); return { message: 'Génération des IDs et noms terminée.' }; }
-function applyDropdownsToSourceSheets() {
-    const ss = SpreadsheetApp.getActiveSpreadsheet(), config = getConfigFromSheet(), sourceSheets = getSourceSheets(ss, config.NB_CLASSES_SOURCES);
-    const rules = {
-        sexe: SpreadsheetApp.newDataValidation().requireValueInList(['M', 'F']).build(),
-        score: SpreadsheetApp.newDataValidation().requireValueInList(['1', '2', '3', '4']).build(),
-        lv2: SpreadsheetApp.newDataValidation().requireValueInList(config.LV2_DISPONIBLES).build(),
-        opt: SpreadsheetApp.newDataValidation().requireValueInList(config.OPTIONS_DISPONIBLES).build()
+function openInterfaceV2() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const testSheets = ss.getSheets().filter(s => s.getName().endsWith('TEST'));
+    if (testSheets.length === 0) throw new Error("Aucun onglet ...TEST trouvé.");
+
+    // 1. Extraire le contexte (données des onglets TEST)
+    const context = {
+      sheets: testSheets.map(s => s.getName()),
+      // On pourrait ajouter plus de données ici : élèves, classes, etc.
     };
-    sourceSheets.forEach(sheet => {
-        const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-        applyRuleToColumn(sheet, 'SEXE', headers, rules.sexe);
-        applyRuleToColumn(sheet, 'LV2', headers, rules.lv2);
-        applyRuleToColumn(sheet, 'OPT', headers, rules.opt);
-        ['COM', 'TRA', 'PART', 'ABS'].forEach(col => applyRuleToColumn(sheet, col, headers, rules.score));
-    });
-    return { message: 'Listes déroulantes appliquées.' };
+
+    // 2. Stocker le contexte pour que l'Interface V2 puisse le lire
+    const userProperties = PropertiesService.getUserProperties();
+    userProperties.setProperty('JULES_CONTEXT', JSON.stringify(context));
+
+    // 3. Lancer l'Interface V2
+    // (en supposant qu'elle a sa propre fonction de lancement)
+    if (typeof showInterfaceV2 === "function") {
+      showInterfaceV2();
+    } else {
+      SpreadsheetApp.getUi().showSidebar(HtmlService.createHtmlOutputFromFile('InterfaceV2'));
+    }
+
+    return { status: 'success', message: 'Ouverture de l\'Interface V2 avec le contexte actuel...' };
+
+  } catch (e) {
+    throw new Error("Impossible d'ouvrir l'Interface V2: " + e.message);
+  }
 }
-function consolidateSourceData() {
-    const ss = SpreadsheetApp.getActiveSpreadsheet(), config = getConfigFromSheet(), sourceSheets = getSourceSheets(ss, config.NB_CLASSES_SOURCES);
-    const consolidationSheet = ss.getSheetByName('CONSOLIDATION');
-    if (consolidationSheet.getLastRow() > 1) consolidationSheet.getRange(2, 1, consolidationSheet.getLastRow() - 1, consolidationSheet.getLastColumn()).clearContent();
-    let allData = [];
-    sourceSheets.forEach(sheet => {
-        if (sheet.getLastRow() > 1) {
-            allData = allData.concat(sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues().map(r => {r[6] = sheet.getName(); return r;}));
-        }
+
+/**
+ * Fournit le contexte de pont à l'InterfaceV2 et le supprime ensuite.
+ * C'est la fonction appelée par l'InterfaceV2 à son initialisation.
+ * @returns {Object} Un objet contenant {success: Boolean, context: Object|null}.
+ */
+/**
+ * Copie les onglets ...TEST vers ...DEF.
+ * C'est l'action finale et irréversible de la console.
+ */
+function finalizeProcess() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const testSheets = ss.getSheets().filter(s => s.getName().endsWith('TEST'));
+
+    if (testSheets.length === 0) {
+      throw new Error("Aucun onglet ...TEST à finaliser.");
+    }
+
+    let finalizedCount = 0;
+    testSheets.forEach(sheet => {
+      const sheetName = sheet.getName();
+      const finalName = sheetName.replace(/TEST$/, 'DEF');
+
+      // Supprimer l'ancien onglet DEF s'il existe
+      const oldDefSheet = ss.getSheetByName(finalName);
+      if (oldDefSheet) {
+        ss.deleteSheet(oldDefSheet);
+      }
+
+      // Copier l'onglet TEST vers le nouvel onglet DEF
+      const newDefSheet = sheet.copyTo(ss);
+      newDefSheet.setName(finalName);
+
+      // Rendre la feuille visible et la protéger (facultatif)
+      newDefSheet.showSheet();
+
+      finalizedCount++;
     });
-    if (allData.length > 0) consolidationSheet.getRange(2, 1, allData.length, allData[0].length).setValues(allData);
-    return { message: `${allData.length} élèves consolidés.` };
+
+    return { success: true, message: `${finalizedCount} classe(s) ont été finalisées avec succès.` };
+  } catch (e) {
+    console.error(`Erreur dans finalizeProcess: ${e.message}`);
+    return { success: false, error: e.message };
+  }
 }
-function loadConfiguration() { /* ... */ }
-function saveConfiguration(classesData) { /* ... */ }
-function runPreflightDiagnostics() { /* ... */ }
-function executeLegacyPipeline() { /* ... */ }
-function openInterfaceV2() { /* ... */ }
-function finalizeProcess() { /* ... */ }
-function createSheetIfNotExists(ss, name, headers) { let s = ss.getSheetByName(name); if(s) ss.deleteSheet(s); s = ss.insertSheet(name); if(headers) s.getRange(1,1,1,headers.length).setValues([headers]).setFontWeight('bold'); }
-function getConfigFromSheet() { /* ... */ }
-function getSourceSheets(ss, nb) { /* ... */ }
-function applyRuleToColumn(sheet, col, headers, rule) { const i = headers.indexOf(col); if(i > -1) sheet.getRange(2, i + 1, sheet.getMaxRows() - 1, 1).setDataValidation(rule); }
+
+function getBridgeContextAndClear() {
+  try {
+    const userProperties = PropertiesService.getUserProperties();
+    const contextString = userProperties.getProperty('JULES_CONTEXT');
+
+    if (contextString) {
+      // Le contexte a été trouvé, on le supprime pour ne pas le réutiliser.
+      userProperties.deleteProperty('JULES_CONTEXT');
+      console.log('🌉 Contexte de pont trouvé et supprimé.');
+      return { success: true, context: JSON.parse(contextString) };
+    } else {
+      console.log('🤷 Aucun contexte de pont trouvé.');
+      return { success: true, context: null };
+    }
+  } catch (e) {
+    console.error(`Erreur dans getBridgeContextAndClear: ${e.message}`);
+    return { success: false, error: e.message };
+  }
+}
