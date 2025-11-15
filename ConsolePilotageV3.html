@@ -1238,6 +1238,79 @@
             from { opacity: 0; }
             to { opacity: 1; }
         }
+
+        /* =====================================================================
+         * FORMULAIRE CLASSES
+         * ===================================================================*/
+        .form-label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: var(--space-sm);
+            color: var(--text-primary);
+            font-size: 0.95em;
+        }
+
+        .form-label i {
+            margin-right: var(--space-xs);
+            color: var(--primary-500);
+        }
+
+        .form-input,
+        .form-select {
+            width: 100%;
+            padding: var(--space-sm) var(--space-md);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            font-size: 0.95em;
+            transition: all 0.2s ease;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+        }
+
+        .form-input:focus,
+        .form-select:focus {
+            outline: none;
+            border-color: var(--primary-500);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-input:hover,
+        .form-select:hover {
+            border-color: var(--primary-400);
+        }
+
+        /* =====================================================================
+         * BOUTON FERMER/TOGGLE
+         * ===================================================================*/
+        .console-toggle-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, var(--primary-500), #764ba2);
+            border-radius: 50%;
+            border: none;
+            color: white;
+            font-size: 26px;
+            cursor: pointer;
+            box-shadow: 0 4px 20px rgba(102, 126, 234, 0.5);
+            z-index: 10000;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .console-toggle-btn:hover {
+            transform: scale(1.1) rotate(90deg);
+            box-shadow: 0 6px 30px rgba(102, 126, 234, 0.7);
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+        }
+
+        .console-toggle-btn:active {
+            transform: scale(0.95);
+        }
     </style>
 </head>
 <body>
@@ -1366,27 +1439,98 @@
             <!-- Phase 1: Initialisation -->
             <div id="phase-1" class="phase active">
                 <div class="content-header">
-                    <h1 class="page-title">Phase 1: Initialisation</h1>
-                    <p class="page-subtitle">Configuration initiale du système et préparation des données pour la répartition</p>
+                    <h1 class="page-title">Phase 1: Initialisation & Configuration</h1>
+                    <p class="page-subtitle" style="font-weight: 600; color: #10b981;">✨ Configurez tous les paramètres directement ici. ZÉRO popup !</p>
                 </div>
 
+                <!-- ========== FORMULAIRE DE CONFIGURATION COMPLET ========== -->
                 <div class="card">
                     <div class="card-header">
-                        <div class="card-icon">
-                            <i class="fas fa-rocket"></i>
-                        </div>
+                        <div class="card-icon"><i class="fas fa-sliders-h"></i></div>
+                        <div><h2 class="card-title">⚙️ Paramètres Généraux</h2></div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--space-lg); margin: var(--space-lg) 0;">
+                        <!-- Niveau Scolaire -->
                         <div>
-                            <h2 class="card-title">Configuration Initiale</h2>
+                            <label class="form-label"><i class="fas fa-graduation-cap"></i> Niveau Scolaire</label>
+                            <select id="config-niveau" class="form-select">
+                                <option value="6°">6ème</option>
+                                <option value="5°" selected>5ème</option>
+                                <option value="4°">4ème</option>
+                                <option value="3°">3ème</option>
+                            </select>
+                        </div>
+
+                        <!-- Nombre de Sources -->
+                        <div>
+                            <label class="form-label"><i class="fas fa-arrow-right"></i> Classes Sources <span id="source-label" style="font-weight: 400; font-size: 0.9em;">(6°)</span></label>
+                            <input type="number" id="config-nb-sources" min="1" max="20" value="6" class="form-input">
+                        </div>
+
+                        <!-- Nombre de Destinations -->
+                        <div>
+                            <label class="form-label"><i class="fas fa-bullseye"></i> Classes Destinations</label>
+                            <input type="number" id="config-nb-dest" min="1" max="15" value="6" class="form-input">
                         </div>
                     </div>
-                    <p class="card-description">
-                        Cette étape cruciale prépare le système pour la répartition. Elle consolide les données des onglets sources,
-                        vérifie la configuration et initialise tous les paramètres nécessaires au bon déroulement du processus.
-                    </p>
-                    <button id="btn-run-initialisation" class="btn btn-primary">
-                        <i class="btn-icon fas fa-play"></i>
-                        <span>Lancer l'Initialisation</span>
-                    </button>
+
+                    <div class="card-header" style="margin-top: var(--space-xl); border-top: 1px solid var(--border-color); padding-top: var(--space-lg);">
+                        <div class="card-icon"><i class="fas fa-book"></i></div>
+                        <div><h2 class="card-title">📚 Options & Langues</h2></div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-lg); margin: var(--space-lg) 0;">
+                        <!-- LV2 -->
+                        <div>
+                            <label class="form-label"><i class="fas fa-language"></i> Langues Vivantes 2 (LV2)</label>
+                            <input type="text" id="config-lv2" placeholder="ESP, ITA, ALL (séparés par virgules)" value="ESP, ITA" class="form-input">
+                            <small style="color: var(--text-secondary); font-size: 0.85em;">Sigles séparés par des virgules</small>
+                        </div>
+
+                        <!-- Options Spécifiques -->
+                        <div>
+                            <label class="form-label"><i class="fas fa-star"></i> Options Spécifiques</label>
+                            <input type="text" id="config-opt" placeholder="LATIN, GREC, CHAV (séparés par virgules)" value="LATIN, GREC, CHAV" class="form-input">
+                            <small style="color: var(--text-secondary); font-size: 0.85em;">Sigles séparés par des virgules</small>
+                        </div>
+                    </div>
+
+                    <div class="card-header" style="margin-top: var(--space-xl); border-top: 1px solid var(--border-color); padding-top: var(--space-lg);">
+                        <div class="card-icon"><i class="fas fa-cog"></i></div>
+                        <div><h2 class="card-title">🎛️ Paramètres Avancés</h2></div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-md); margin: var(--space-lg) 0;">
+                        <div>
+                            <label class="form-label">Max Swaps</label>
+                            <input type="number" id="config-max-swaps" min="10" max="200" value="50" class="form-input">
+                        </div>
+                        <div>
+                            <label class="form-label">Tolérance Parité</label>
+                            <input type="number" id="config-parity-tolerance" min="0" max="5" value="2" class="form-input">
+                        </div>
+                        <div>
+                            <label class="form-label">Suffixe TEST</label>
+                            <input type="text" id="config-test-suffix" value="TEST" class="form-input">
+                        </div>
+                        <div>
+                            <label class="form-label">Suffixe DEF</label>
+                            <input type="text" id="config-def-suffix" value="DEF" class="form-input">
+                        </div>
+                    </div>
+
+                    <!-- Boutons d'action -->
+                    <div style="display: flex; gap: var(--space-md); margin-top: var(--space-xl); padding-top: var(--space-lg); border-top: 1px solid var(--border-color);">
+                        <button id="btn-save-config" class="btn btn-success" style="flex: 1;">
+                            <i class="btn-icon fas fa-save"></i>
+                            <span>Sauvegarder la Configuration</span>
+                        </button>
+                        <button id="btn-run-initialisation" class="btn btn-primary" style="flex: 1;">
+                            <i class="btn-icon fas fa-play"></i>
+                            <span>Lancer l'Initialisation</span>
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -1648,6 +1792,13 @@
             <div class="loading-text" id="loading-text">Chargement...</div>
         </div>
     </div>
+
+    <!-- =====================================================================
+     * BOUTON FERMER/MINIMISER
+     * ===================================================================-->
+    <button class="console-toggle-btn" id="consoleToggleBtn" title="Fermer la console (Ctrl+M)">
+        <i class="fas fa-times"></i>
+    </button>
 
     <!-- =====================================================================
      * JAVASCRIPT
@@ -1987,8 +2138,110 @@
             document.getElementById('btn-close-modal').addEventListener('click', hideModal);
             document.getElementById('btn-cancel-finalize').addEventListener('click', hideModal);
 
-            // Phase 1: Initialisation
+            // ===================================================================
+            // GESTION DU FORMULAIRE DE CONFIGURATION
+            // ===================================================================
+            const configNiveau = document.getElementById('config-niveau');
+            const configNbSources = document.getElementById('config-nb-sources');
+            const configNbDest = document.getElementById('config-nb-dest');
+            const configLv2 = document.getElementById('config-lv2');
+            const configOpt = document.getElementById('config-opt');
+            const configMaxSwaps = document.getElementById('config-max-swaps');
+            const configParityTolerance = document.getElementById('config-parity-tolerance');
+            const configTestSuffix = document.getElementById('config-test-suffix');
+            const configDefSuffix = document.getElementById('config-def-suffix');
+            const sourceLabel = document.getElementById('source-label');
+
+            // Fonction pour déterminer le niveau source
+            const getNiveauSource = (niveau) => {
+                switch(niveau) {
+                    case '6°': return '(écoles primaires)';
+                    case '5°': return '(6°)';
+                    case '4°': return '(5°)';
+                    case '3°': return '(4°)';
+                    default: return '';
+                }
+            };
+
+            // Mise à jour du label quand le niveau change
+            configNiveau.addEventListener('change', () => {
+                sourceLabel.textContent = getNiveauSource(configNiveau.value);
+            });
+
+            // Charger la configuration sauvegardée si elle existe
+            const loadSavedConfig = () => {
+                const saved = localStorage.getItem('console_v3_config');
+                if (saved) {
+                    try {
+                        const config = JSON.parse(saved);
+                        if (config.niveau) configNiveau.value = config.niveau;
+                        if (config.nbSources) configNbSources.value = config.nbSources;
+                        if (config.nbDest) configNbDest.value = config.nbDest;
+                        if (config.lv2) configLv2.value = config.lv2;
+                        if (config.opt) configOpt.value = config.opt;
+                        if (config.maxSwaps) configMaxSwaps.value = config.maxSwaps;
+                        if (config.parityTolerance) configParityTolerance.value = config.parityTolerance;
+                        if (config.testSuffix) configTestSuffix.value = config.testSuffix;
+                        if (config.defSuffix) configDefSuffix.value = config.defSuffix;
+                        sourceLabel.textContent = getNiveauSource(configNiveau.value);
+                        showToast('info', 'Configuration chargée depuis le cache local.');
+                    } catch(e) {
+                        console.error('Erreur chargement config:', e);
+                    }
+                }
+            };
+
+            // Sauvegarder la configuration
+            document.getElementById('btn-save-config').addEventListener('click', () => {
+                const config = {
+                    niveau: configNiveau.value,
+                    nbSources: parseInt(configNbSources.value),
+                    nbDest: parseInt(configNbDest.value),
+                    lv2: configLv2.value,
+                    opt: configOpt.value,
+                    maxSwaps: parseInt(configMaxSwaps.value),
+                    parityTolerance: parseInt(configParityTolerance.value),
+                    testSuffix: configTestSuffix.value,
+                    defSuffix: configDefSuffix.value
+                };
+
+                // Sauvegarder localement
+                localStorage.setItem('console_v3_config', JSON.stringify(config));
+
+                // Envoyer au backend pour mise à jour de _CONFIG
+                showLoading('Sauvegarde de la configuration...');
+                google.script.run
+                    .withSuccessHandler(() => {
+                        hideLoading();
+                        showToast('success', 'Configuration sauvegardée avec succès !');
+                    })
+                    .withFailureHandler((error) => {
+                        hideLoading();
+                        showToast('error', 'Erreur lors de la sauvegarde : ' + error.message);
+                    })
+                    .saveConfiguration(config);
+            });
+
+            // Phase 1: Initialisation avec les données du formulaire
             document.getElementById('btn-run-initialisation').addEventListener('click', () => {
+                const config = {
+                    niveau: configNiveau.value,
+                    nbSources: parseInt(configNbSources.value),
+                    nbDest: parseInt(configNbDest.value),
+                    lv2: configLv2.value.split(',').map(s => s.trim().toUpperCase()).filter(Boolean),
+                    opt: configOpt.value.split(',').map(s => s.trim().toUpperCase()).filter(Boolean)
+                };
+
+                // Validation basique
+                if (config.nbSources < 1 || config.nbSources > 20) {
+                    showToast('error', 'Le nombre de sources doit être entre 1 et 20.');
+                    return;
+                }
+                if (config.nbDest < 1 || config.nbDest > 15) {
+                    showToast('error', 'Le nombre de destinations doit être entre 1 et 15.');
+                    return;
+                }
+
                 updatePhaseStatus(1, 'active');
                 showLoading('Initialisation en cours...');
 
@@ -2011,8 +2264,11 @@
                         showToast('error', 'Erreur lors de l\'initialisation');
                         showAlert('error', error.message);
                     })
-                    .v3_runInitialisation();
+                    .initialiserSystemeDirect(config.niveau, config.nbSources, config.nbDest, config.lv2, config.opt);
             });
+
+            // Charger la config au démarrage
+            loadSavedConfig();
 
             // Phase 2: Diagnostic
             document.getElementById('btn-run-diagnostics').addEventListener('click', () => {
@@ -2201,6 +2457,32 @@
             // Initial state
             updateNavLockState();
             updateGlobalProgress();
+
+            // ===================================================================
+            // BOUTON FERMER LA CONSOLE
+            // ===================================================================
+            const consoleToggleBtn = document.getElementById('consoleToggleBtn');
+
+            // Fonction pour fermer le modal
+            const closeConsole = () => {
+                // Sauvegarder l'état dans localStorage pour rouvrir sur la même phase
+                const currentPhase = appState.currentPhase;
+                localStorage.setItem('console_v3_last_phase', currentPhase);
+
+                // Fermer le modal dialog
+                google.script.host.close();
+            };
+
+            // Événement du bouton
+            consoleToggleBtn.addEventListener('click', closeConsole);
+
+            // Raccourci clavier : Ctrl + M (ou Cmd + M sur Mac)
+            document.addEventListener('keydown', (e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key === 'm') {
+                    e.preventDefault();
+                    closeConsole();
+                }
+            });
 
             console.log('✅ Console de Pilotage V3 Expert Edition chargée !');
         });
