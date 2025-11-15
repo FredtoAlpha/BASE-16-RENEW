@@ -13,6 +13,8 @@ function onOpen() {
     ui.createMenu('🎯 CONSOLE')
       .addItem('📋 Panneau de Contrôle', 'showPanneauControle')
       .addSeparator()
+      .addItem('🚀 ASSISTANT DE CONFIGURATION (NOUVEAU)', 'ouvrirWizardInterface')
+      .addSeparator()
       .addItem('🏗️ Initialiser Système', 'ouvrirInitialisation')
       .addItem('🆔 Générer NOM_PRENOM & ID', 'genererNomPrenomEtID')
       .addItem('📋 Listes Déroulantes', 'ajouterListesDeroulantes')
