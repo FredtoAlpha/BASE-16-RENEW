@@ -1993,11 +1993,17 @@
                 showLoading('Initialisation en cours...');
 
                 google.script.run
-                    .withSuccessHandler(() => {
+                    .withSuccessHandler(response => {
                         hideLoading();
-                        updatePhaseStatus(1, 'completed');
-                        showToast('success', 'Initialisation terminée avec succès !');
-                        showAlert('success', 'Le système a été initialisé avec succès. Vous pouvez passer au diagnostic.');
+                        if (response.success) {
+                            updatePhaseStatus(1, 'completed');
+                            showToast('success', 'Initialisation terminée avec succès !');
+                            showAlert('success', response.message || 'Le système a été initialisé avec succès. Vous pouvez passer au diagnostic.');
+                        } else {
+                            updatePhaseStatus(1, 'error');
+                            showToast('error', 'Erreur lors de l\'initialisation');
+                            showAlert('error', response.error || 'Une erreur est survenue');
+                        }
                     })
                     .withFailureHandler(error => {
                         hideLoading();
@@ -2005,7 +2011,7 @@
                         showToast('error', 'Erreur lors de l\'initialisation');
                         showAlert('error', error.message);
                     })
-                    .ouvrirInitialisation();
+                    .v3_runInitialisation();
             });
 
             // Phase 2: Diagnostic
@@ -2034,7 +2040,7 @@
                         showToast('error', 'Erreur lors du diagnostic');
                         showAlert('error', error.message);
                     })
-                    .runGlobalDiagnostics();
+                    .v3_runDiagnostics();
             });
 
             // Phase 3: Génération
@@ -2043,11 +2049,17 @@
                 showLoading('Génération des classes en cours...');
 
                 google.script.run
-                    .withSuccessHandler(() => {
+                    .withSuccessHandler(response => {
                         hideLoading();
-                        updatePhaseStatus(3, 'completed');
-                        showToast('success', 'Classes générées avec succès !');
-                        showAlert('success', 'Les classes ont été générées dans les onglets ...TEST.');
+                        if (response.success) {
+                            updatePhaseStatus(3, 'completed');
+                            showToast('success', 'Classes générées avec succès !');
+                            showAlert('success', response.message || 'Les classes ont été générées dans les onglets ...TEST.');
+                        } else {
+                            updatePhaseStatus(3, 'error');
+                            showToast('error', 'Erreur lors de la génération');
+                            showAlert('error', response.error || 'Une erreur est survenue');
+                        }
                     })
                     .withFailureHandler(error => {
                         hideLoading();
@@ -2055,7 +2067,7 @@
                         showToast('error', 'Erreur lors de la génération');
                         showAlert('error', error.message);
                     })
-                    .legacy_runFullPipeline();
+                    .v3_runGeneration();
             });
 
             // Phase 4: Optimisation
@@ -2063,16 +2075,23 @@
                 updatePhaseStatus(4, 'active');
 
                 google.script.run
-                    .withSuccessHandler(() => {
-                        updatePhaseStatus(4, 'completed');
-                        showToast('success', 'Panneau d\'optimisation ouvert');
+                    .withSuccessHandler(response => {
+                        if (response.success) {
+                            updatePhaseStatus(4, 'completed');
+                            showToast('success', 'Panneau d\'optimisation ouvert');
+                            showAlert('success', response.message || 'Utilisez le panneau pour optimiser la répartition.');
+                        } else {
+                            updatePhaseStatus(4, 'error');
+                            showToast('error', 'Erreur lors de l\'optimisation');
+                            showAlert('error', response.error || 'Une erreur est survenue');
+                        }
                     })
                     .withFailureHandler(error => {
                         updatePhaseStatus(4, 'error');
                         showToast('error', 'Erreur lors de l\'optimisation');
                         showAlert('error', error.message);
                     })
-                    .showOptimizationPanel();
+                    .v3_runOptimization();
             });
 
             // Phase 5: Swaps Manuels
@@ -2080,17 +2099,23 @@
                 updatePhaseStatus(5, 'active');
 
                 google.script.run
-                    .withSuccessHandler(() => {
-                        window.open(google.script.host.origin + google.script.host.path, '_blank');
-                        updatePhaseStatus(5, 'completed');
-                        showToast('success', 'Interface de swap ouverte');
+                    .withSuccessHandler(response => {
+                        if (response.success) {
+                            window.open(google.script.host.origin + google.script.host.path, '_blank');
+                            updatePhaseStatus(5, 'completed');
+                            showToast('success', 'Interface de swap ouverte');
+                        } else {
+                            updatePhaseStatus(5, 'error');
+                            showToast('error', 'Erreur lors de l\'ouverture');
+                            showAlert('error', response.error || 'Impossible d\'ouvrir l\'interface');
+                        }
                     })
                     .withFailureHandler(error => {
                         updatePhaseStatus(5, 'error');
                         showToast('error', 'Erreur lors de l\'ouverture');
                         showAlert('error', error.message);
                     })
-                    .setBridgeContext('TEST', '');
+                    .v3_setBridgeContext('TEST', '');
             });
 
             // Phase 6: Finalisation
@@ -2138,7 +2163,7 @@
                         showToast('error', 'Erreur lors de la vérification');
                         showAlert('error', error.message);
                     })
-                    .runGlobalDiagnostics();
+                    .v3_runDiagnostics();
             });
 
             // Confirm finalize
@@ -2150,9 +2175,15 @@
                 google.script.run
                     .withSuccessHandler(response => {
                         hideLoading();
-                        updatePhaseStatus(6, 'completed');
-                        showToast('success', 'Processus finalisé avec succès !');
-                        showAlert('success', response.message);
+                        if (response.success) {
+                            updatePhaseStatus(6, 'completed');
+                            showToast('success', 'Processus finalisé avec succès !');
+                            showAlert('success', response.message);
+                        } else {
+                            updatePhaseStatus(6, 'error');
+                            showToast('error', 'Erreur lors de la finalisation');
+                            showAlert('error', response.error || 'Une erreur est survenue');
+                        }
                     })
                     .withFailureHandler(error => {
                         hideLoading();
@@ -2160,7 +2191,7 @@
                         showToast('error', 'Erreur lors de la finalisation');
                         showAlert('error', error.message);
                     })
-                    .finalizeProcess();
+                    .v3_finalizeProcess();
             });
 
             // Start clock
