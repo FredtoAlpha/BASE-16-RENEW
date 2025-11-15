@@ -1,0 +1,1017 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+
+  <style>
+    /* ===================================================================
+     * STYLES GLOBAUX
+     * =================================================================*/
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Roboto', Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+      color: #333;
+    }
+
+    .wizard-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      overflow: hidden;
+    }
+
+    /* ===================================================================
+     * HEADER & STEPPER
+     * =================================================================*/
+    .wizard-header {
+      background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
+      color: white;
+      padding: 30px;
+      text-align: center;
+    }
+
+    .wizard-header h1 {
+      font-size: 28px;
+      font-weight: 300;
+      margin-bottom: 10px;
+    }
+
+    .wizard-header .subtitle {
+      font-size: 14px;
+      opacity: 0.9;
+    }
+
+    .stepper {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin: 30px 0 0 0;
+      padding: 0 20px;
+    }
+
+    .step {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+    }
+
+    .step:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      width: 100%;
+      height: 3px;
+      background: rgba(255,255,255,0.3);
+      z-index: 0;
+    }
+
+    .step.completed:not(:last-child)::after {
+      background: #4caf50;
+    }
+
+    .step.active:not(:last-child)::after {
+      background: linear-gradient(to right, #4caf50 50%, rgba(255,255,255,0.3) 50%);
+    }
+
+    .step-circle {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.3);
+      border: 3px solid rgba(255,255,255,0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 16px;
+      color: white;
+      position: relative;
+      z-index: 1;
+      transition: all 0.3s ease;
+    }
+
+    .step.completed .step-circle {
+      background: #4caf50;
+      border-color: #4caf50;
+    }
+
+    .step.active .step-circle {
+      background: white;
+      color: #1976d2;
+      border-color: white;
+      transform: scale(1.2);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+
+    .step-label {
+      margin-top: 10px;
+      font-size: 12px;
+      text-align: center;
+      color: rgba(255,255,255,0.8);
+      font-weight: 500;
+    }
+
+    .step.active .step-label {
+      color: white;
+      font-weight: 700;
+    }
+
+    /* ===================================================================
+     * CONTENU DES PHASES
+     * =================================================================*/
+    .wizard-content {
+      padding: 40px;
+      min-height: 500px;
+    }
+
+    .phase {
+      display: none;
+      animation: fadeIn 0.3s ease-in;
+    }
+
+    .phase.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .phase-title {
+      font-size: 24px;
+      font-weight: 500;
+      color: #1976d2;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .phase-title .material-icons {
+      font-size: 32px;
+    }
+
+    .phase-description {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 30px;
+    }
+
+    /* ===================================================================
+     * CARTES & SECTIONS
+     * =================================================================*/
+    .config-card {
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+
+    .config-card-title {
+      font-size: 16px;
+      font-weight: 500;
+      color: #333;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .config-card-title .material-icons {
+      color: #1976d2;
+      font-size: 20px;
+    }
+
+    .section-header {
+      background: #f5f5f5;
+      padding: 12px 16px;
+      border-radius: 6px;
+      margin-bottom: 16px;
+      font-weight: 500;
+      color: #555;
+    }
+
+    /* ===================================================================
+     * FORMULAIRES
+     * =================================================================*/
+    .form-row {
+      display: flex;
+      align-items: center;
+      margin-bottom: 16px;
+      gap: 16px;
+    }
+
+    .form-row label {
+      flex: 0 0 200px;
+      font-size: 14px;
+      color: #555;
+      font-weight: 500;
+    }
+
+    .form-row input,
+    .form-row select {
+      flex: 1;
+      padding: 10px 14px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-family: 'Roboto', sans-serif;
+      font-size: 14px;
+      transition: border-color 0.2s;
+    }
+
+    .form-row input:focus,
+    .form-row select:focus {
+      outline: none;
+      border-color: #1976d2;
+      box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.1);
+    }
+
+    .form-row input[type="number"] {
+      max-width: 120px;
+    }
+
+    /* ===================================================================
+     * BOUTONS
+     * =================================================================*/
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 6px;
+      font-family: 'Roboto', sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+
+    .btn:active {
+      transform: translateY(0);
+    }
+
+    .btn-primary {
+      background: #1976d2;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #1565c0;
+    }
+
+    .btn-secondary {
+      background: #f5f5f5;
+      color: #555;
+    }
+
+    .btn-secondary:hover {
+      background: #e0e0e0;
+    }
+
+    .btn-success {
+      background: #4caf50;
+      color: white;
+    }
+
+    .btn-success:hover {
+      background: #45a049;
+    }
+
+    .btn-danger {
+      background: #f44336;
+      color: white;
+    }
+
+    .btn-danger:hover {
+      background: #da190b;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+
+    /* ===================================================================
+     * NAVIGATION FOOTER
+     * =================================================================*/
+    .wizard-footer {
+      border-top: 1px solid #e0e0e0;
+      padding: 20px 40px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #fafafa;
+    }
+
+    .wizard-footer .left {
+      display: flex;
+      gap: 12px;
+    }
+
+    .wizard-footer .right {
+      display: flex;
+      gap: 12px;
+    }
+
+    /* ===================================================================
+     * ALERTES & NOTIFICATIONS
+     * =================================================================*/
+    .alert {
+      padding: 16px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .alert .material-icons {
+      font-size: 24px;
+    }
+
+    .alert-info {
+      background: #e3f2fd;
+      color: #1976d2;
+      border-left: 4px solid #1976d2;
+    }
+
+    .alert-success {
+      background: #e8f5e9;
+      color: #2e7d32;
+      border-left: 4px solid #4caf50;
+    }
+
+    .alert-warning {
+      background: #fff3e0;
+      color: #e65100;
+      border-left: 4px solid #ff9800;
+    }
+
+    .alert-error {
+      background: #ffebee;
+      color: #c62828;
+      border-left: 4px solid #f44336;
+    }
+
+    /* ===================================================================
+     * LISTES DE TAGS
+     * =================================================================*/
+    .tag-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .tag {
+      background: #e3f2fd;
+      color: #1976d2;
+      padding: 6px 12px;
+      border-radius: 16px;
+      font-size: 13px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .tag .remove-tag {
+      cursor: pointer;
+      opacity: 0.7;
+      transition: opacity 0.2s;
+    }
+
+    .tag .remove-tag:hover {
+      opacity: 1;
+    }
+
+    /* ===================================================================
+     * BARRE DE PROGRESSION
+     * =================================================================*/
+    .progress-bar-container {
+      width: 100%;
+      height: 8px;
+      background: #e0e0e0;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+
+    .progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #4caf50 0%, #8bc34a 100%);
+      transition: width 0.3s ease;
+      border-radius: 4px;
+    }
+
+    /* ===================================================================
+     * SPINNER / CHARGEMENT
+     * =================================================================*/
+    .spinner {
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #1976d2;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 20px auto;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.7);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+
+    .loading-overlay.active {
+      display: flex;
+    }
+
+    .loading-content {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      text-align: center;
+      max-width: 400px;
+    }
+
+    /* ===================================================================
+     * RESPONSIVE
+     * =================================================================*/
+    @media (max-width: 768px) {
+      .wizard-container {
+        margin: 10px;
+      }
+
+      .wizard-content {
+        padding: 20px;
+      }
+
+      .stepper {
+        padding: 0 10px;
+      }
+
+      .step-label {
+        font-size: 10px;
+      }
+
+      .form-row {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .form-row label {
+        flex: none;
+        margin-bottom: 6px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Overlay de chargement -->
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-content">
+      <div class="spinner"></div>
+      <p id="loadingMessage">Chargement...</p>
+    </div>
+  </div>
+
+  <!-- Conteneur principal du wizard -->
+  <div class="wizard-container">
+    <!-- Header -->
+    <div class="wizard-header">
+      <h1>🎯 BASE-16 RENEW</h1>
+      <div class="subtitle">Répartition des Élèves - Système Complet</div>
+
+      <!-- Stepper -->
+      <div class="stepper">
+        <div class="step active" data-step="1">
+          <div class="step-circle">1</div>
+          <div class="step-label">Init</div>
+        </div>
+        <div class="step" data-step="2">
+          <div class="step-circle">2</div>
+          <div class="step-label">Import</div>
+        </div>
+        <div class="step" data-step="3">
+          <div class="step-circle">3</div>
+          <div class="step-label">Config</div>
+        </div>
+        <div class="step" data-step="4">
+          <div class="step-circle">4</div>
+          <div class="step-label">Exec</div>
+        </div>
+        <div class="step" data-step="5">
+          <div class="step-circle">5</div>
+          <div class="step-label">Valid</div>
+        </div>
+        <div class="step" data-step="6">
+          <div class="step-circle">6</div>
+          <div class="step-label">Final</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Contenu des phases -->
+    <div class="wizard-content">
+      <!-- PHASE 1: INITIALISATION -->
+      <div class="phase active" id="phase-1">
+        <div class="phase-title">
+          <span class="material-icons">settings</span>
+          Initialisation du système
+        </div>
+        <div class="phase-description">
+          Configuration initiale : niveau, classes sources/destinations, LV2 et options disponibles
+        </div>
+
+        <!-- Placeholder pour le contenu de la Phase 1 -->
+        <div id="phase-1-content">
+          <!-- Le contenu sera ajouté via JavaScript -->
+        </div>
+      </div>
+
+      <!-- PHASE 2: IMPORT & PRÉPARATION -->
+      <div class="phase" id="phase-2">
+        <div class="phase-title">
+          <span class="material-icons">upload_file</span>
+          Import & Préparation des données
+        </div>
+        <div class="phase-description">
+          Import CSV, génération automatique des colonnes, validation et consolidation
+        </div>
+
+        <div id="phase-2-content">
+          <!-- Le contenu sera ajouté via JavaScript -->
+        </div>
+      </div>
+
+      <!-- PHASE 3: CONFIGURATION -->
+      <div class="phase" id="phase-3">
+        <div class="phase-title">
+          <span class="material-icons">tune</span>
+          Configuration du pipeline
+        </div>
+        <div class="phase-description">
+          Mapping classes, quotas LV2/Options et coefficients de pondération
+        </div>
+
+        <div id="phase-3-content">
+          <!-- Le contenu sera ajouté via JavaScript -->
+        </div>
+      </div>
+
+      <!-- PHASE 4: EXÉCUTION -->
+      <div class="phase" id="phase-4">
+        <div class="phase-title">
+          <span class="material-icons">play_circle</span>
+          Exécution du pipeline
+        </div>
+        <div class="phase-description">
+          Lancement du pipeline LEGACY avec suivi en temps réel
+        </div>
+
+        <div id="phase-4-content">
+          <!-- Le contenu sera ajouté via JavaScript -->
+        </div>
+      </div>
+
+      <!-- PHASE 5: VALIDATION & RAPPORT -->
+      <div class="phase" id="phase-5">
+        <div class="phase-title">
+          <span class="material-icons">check_circle</span>
+          Validation & Rapport
+        </div>
+        <div class="phase-description">
+          Résumé détaillé, alertes et actions correctives
+        </div>
+
+        <div id="phase-5-content">
+          <!-- Le contenu sera ajouté via JavaScript -->
+        </div>
+      </div>
+
+      <!-- PHASE 6: FINALISATION -->
+      <div class="phase" id="phase-6">
+        <div class="phase-title">
+          <span class="material-icons">flag</span>
+          Finalisation
+        </div>
+        <div class="phase-description">
+          Swaps manuels, passage TEST → DEF et exports
+        </div>
+
+        <div id="phase-6-content">
+          <!-- Le contenu sera ajouté via JavaScript -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer avec navigation -->
+    <div class="wizard-footer">
+      <div class="left">
+        <button class="btn btn-secondary" id="btn-cancel">
+          <span class="material-icons">close</span>
+          Annuler
+        </button>
+        <button class="btn btn-secondary" id="btn-save-session" style="display:none;">
+          <span class="material-icons">save</span>
+          Sauvegarder
+        </button>
+      </div>
+
+      <div class="right">
+        <button class="btn btn-secondary" id="btn-previous" disabled>
+          <span class="material-icons">arrow_back</span>
+          Précédent
+        </button>
+        <button class="btn btn-primary" id="btn-next">
+          Suivant
+          <span class="material-icons">arrow_forward</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ===================================================================
+    // VARIABLES GLOBALES
+    // ===================================================================
+    let currentPhase = 1;
+    const totalPhases = 6;
+
+    // État du wizard (sauvegardé)
+    let wizardState = {
+      phase: 1,
+      data: {
+        // Phase 1
+        niveau: '',
+        nbSources: 0,
+        nbDestinations: 0,
+        lv2Options: [],
+        optOptions: [],
+
+        // Phase 2
+        importMethod: '',
+        dataValidated: false,
+        consolidated: false,
+
+        // Phase 3
+        mappingComplete: false,
+        quotasComplete: false,
+        coefficientsComplete: false,
+
+        // Phase 4
+        pipelineExecuted: false,
+
+        // Phase 5
+        validationComplete: false,
+
+        // Phase 6
+        finalized: false
+      }
+    };
+
+    // ===================================================================
+    // FONCTIONS D'INITIALISATION
+    // ===================================================================
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('🚀 Wizard Interface chargée');
+
+      // Charger l'état sauvegardé (si existe)
+      loadSavedSession();
+
+      // Initialiser les event listeners
+      initEventListeners();
+
+      // Charger le contenu de la phase 1
+      loadPhaseContent(1);
+    });
+
+    function initEventListeners() {
+      // Boutons de navigation
+      document.getElementById('btn-previous').addEventListener('click', () => goToPhase(currentPhase - 1));
+      document.getElementById('btn-next').addEventListener('click', () => goToPhase(currentPhase + 1));
+      document.getElementById('btn-cancel').addEventListener('click', cancelWizard);
+      document.getElementById('btn-save-session').addEventListener('click', saveSession);
+    }
+
+    // ===================================================================
+    // NAVIGATION ENTRE PHASES
+    // ===================================================================
+    function goToPhase(phase) {
+      if (phase < 1 || phase > totalPhases) return;
+
+      // Validation avant de passer à la phase suivante
+      if (phase > currentPhase && !validateCurrentPhase()) {
+        return;
+      }
+
+      // Masquer la phase actuelle
+      document.querySelector('.phase.active').classList.remove('active');
+      document.querySelector('.step.active').classList.remove('active');
+
+      // Marquer les phases complétées
+      for (let i = 1; i < phase; i++) {
+        document.querySelector(`.step[data-step="${i}"]`).classList.add('completed');
+      }
+
+      // Afficher la nouvelle phase
+      currentPhase = phase;
+      document.getElementById(`phase-${phase}`).classList.add('active');
+      document.querySelector(`.step[data-step="${phase}"]`).classList.add('active');
+
+      // Charger le contenu de la phase
+      loadPhaseContent(phase);
+
+      // Mettre à jour les boutons
+      updateNavigationButtons();
+
+      // Sauvegarder l'état
+      wizardState.phase = phase;
+      saveSession();
+    }
+
+    function updateNavigationButtons() {
+      const btnPrevious = document.getElementById('btn-previous');
+      const btnNext = document.getElementById('btn-next');
+
+      // Bouton Précédent
+      btnPrevious.disabled = (currentPhase === 1);
+
+      // Bouton Suivant / Terminer
+      if (currentPhase === totalPhases) {
+        btnNext.innerHTML = '<span class="material-icons">check</span> Terminer';
+        btnNext.classList.remove('btn-primary');
+        btnNext.classList.add('btn-success');
+      } else {
+        btnNext.innerHTML = 'Suivant <span class="material-icons">arrow_forward</span>';
+        btnNext.classList.remove('btn-success');
+        btnNext.classList.add('btn-primary');
+      }
+    }
+
+    // ===================================================================
+    // VALIDATION DES PHASES
+    // ===================================================================
+    function validateCurrentPhase() {
+      switch(currentPhase) {
+        case 1:
+          return validatePhase1();
+        case 2:
+          return validatePhase2();
+        case 3:
+          return validatePhase3();
+        case 4:
+          return validatePhase4();
+        case 5:
+          return validatePhase5();
+        case 6:
+          return validatePhase6();
+        default:
+          return true;
+      }
+    }
+
+    function validatePhase1() {
+      // Vérifier que tous les champs sont remplis
+      const niveau = document.getElementById('niveau-select')?.value;
+      const nbSources = parseInt(document.getElementById('nb-sources')?.value);
+      const nbDest = parseInt(document.getElementById('nb-destinations')?.value);
+
+      if (!niveau || !nbSources || !nbDest) {
+        showAlert('error', 'Veuillez remplir tous les champs obligatoires');
+        return false;
+      }
+
+      if (nbSources < 1 || nbDest < 1) {
+        showAlert('error', 'Le nombre de classes doit être au moins 1');
+        return false;
+      }
+
+      // Sauvegarder dans l'état
+      wizardState.data.niveau = niveau;
+      wizardState.data.nbSources = nbSources;
+      wizardState.data.nbDestinations = nbDest;
+      wizardState.data.lv2Options = getLV2Options();
+      wizardState.data.optOptions = getOptOptions();
+
+      return true;
+    }
+
+    function validatePhase2() {
+      // Phase 2 est validée quand les données sont consolidées
+      return wizardState.data.consolidated === true;
+    }
+
+    function validatePhase3() {
+      // Phase 3 est validée quand la configuration est complète
+      return wizardState.data.mappingComplete &&
+             wizardState.data.quotasComplete &&
+             wizardState.data.coefficientsComplete;
+    }
+
+    function validatePhase4() {
+      // Phase 4 est validée quand le pipeline est exécuté
+      return wizardState.data.pipelineExecuted === true;
+    }
+
+    function validatePhase5() {
+      // Phase 5 toujours validée (consultation du rapport)
+      return true;
+    }
+
+    function validatePhase6() {
+      // Phase 6 toujours validée (actions finales)
+      return true;
+    }
+
+    // ===================================================================
+    // CHARGEMENT DU CONTENU DES PHASES
+    // ===================================================================
+    function loadPhaseContent(phase) {
+      console.log(`📄 Chargement du contenu de la phase ${phase}`);
+
+      switch(phase) {
+        case 1:
+          loadPhase1Content();
+          break;
+        case 2:
+          loadPhase2Content();
+          break;
+        case 3:
+          loadPhase3Content();
+          break;
+        case 4:
+          loadPhase4Content();
+          break;
+        case 5:
+          loadPhase5Content();
+          break;
+        case 6:
+          loadPhase6Content();
+          break;
+      }
+    }
+
+    // ===================================================================
+    // UTILITAIRES
+    // ===================================================================
+    function showAlert(type, message) {
+      const alertDiv = document.createElement('div');
+      alertDiv.className = `alert alert-${type}`;
+
+      const icon = type === 'error' ? 'error' :
+                   type === 'warning' ? 'warning' :
+                   type === 'success' ? 'check_circle' : 'info';
+
+      alertDiv.innerHTML = `
+        <span class="material-icons">${icon}</span>
+        <div>${message}</div>
+      `;
+
+      const content = document.querySelector('.phase.active');
+      content.insertBefore(alertDiv, content.firstChild);
+
+      // Auto-suppression après 5 secondes
+      setTimeout(() => alertDiv.remove(), 5000);
+    }
+
+    function showLoading(message = 'Chargement...') {
+      const overlay = document.getElementById('loadingOverlay');
+      document.getElementById('loadingMessage').textContent = message;
+      overlay.classList.add('active');
+    }
+
+    function hideLoading() {
+      document.getElementById('loadingOverlay').classList.remove('active');
+    }
+
+    function cancelWizard() {
+      if (confirm('Êtes-vous sûr de vouloir annuler ? Les modifications non sauvegardées seront perdues.')) {
+        google.script.host.close();
+      }
+    }
+
+    // ===================================================================
+    // SAUVEGARDE DE SESSION
+    // ===================================================================
+    function saveSession() {
+      showLoading('Sauvegarde de la session...');
+
+      google.script.run
+        .withSuccessHandler(() => {
+          hideLoading();
+          showAlert('success', 'Session sauvegardée avec succès');
+        })
+        .withFailureHandler((error) => {
+          hideLoading();
+          showAlert('error', 'Erreur lors de la sauvegarde : ' + error);
+        })
+        .sauvegarderEtatWizard(wizardState);
+    }
+
+    function loadSavedSession() {
+      showLoading('Vérification d\'une session en cours...');
+
+      google.script.run
+        .withSuccessHandler((savedState) => {
+          hideLoading();
+
+          if (savedState && savedState.phase > 1) {
+            if (confirm(`Session précédente trouvée (Phase ${savedState.phase}).\nVoulez-vous reprendre ?`)) {
+              wizardState = savedState;
+              goToPhase(savedState.phase);
+            }
+          }
+        })
+        .withFailureHandler((error) => {
+          hideLoading();
+          console.warn('Aucune session sauvegardée trouvée');
+        })
+        .chargerEtatWizard();
+    }
+
+    // ===================================================================
+    // PLACEHOLDER - LES FONCTIONS DE CONTENU SERONT AJOUTÉES ENSUITE
+    // ===================================================================
+    function loadPhase1Content() {
+      console.log('⏳ Phase 1 content à implémenter');
+    }
+
+    function loadPhase2Content() {
+      console.log('⏳ Phase 2 content à implémenter');
+    }
+
+    function loadPhase3Content() {
+      console.log('⏳ Phase 3 content à implémenter');
+    }
+
+    function loadPhase4Content() {
+      console.log('⏳ Phase 4 content à implémenter');
+    }
+
+    function loadPhase5Content() {
+      console.log('⏳ Phase 5 content à implémenter');
+    }
+
+    function loadPhase6Content() {
+      console.log('⏳ Phase 6 content à implémenter');
+    }
+
+    function getLV2Options() {
+      return [];
+    }
+
+    function getOptOptions() {
+      return [];
+    }
+  </script>
+
+  <!-- Inclusion du contenu des phases -->
+  <?!= HtmlService.createHtmlOutputFromFile('WizardPhases').getContent(); ?>
+</body>
+</html>
