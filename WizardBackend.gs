@@ -591,3 +591,269 @@ function cleanLegacyProgress() {
   userProps.deleteProperty('LEGACY_PROGRESS');
   userProps.deleteProperty('LEGACY_START_TIME');
 }
+
+// ===================================================================
+// WRAPPERS POUR LES NOUVELLES PHASES (3, 4, 5, 6)
+// ===================================================================
+
+/**
+ * Wrapper pour lancer le pipeline LEGACY complet (Phase 4)
+ * Avec émission de progression pour feedback temps réel
+ */
+function wizard_runFullPipeline() {
+  try {
+    Logger.log('🚀 [WIZARD] Lancement pipeline LEGACY complet');
+
+    // Initialiser le tracking de progression
+    initLegacyProgress();
+
+    emettreProgression(0, 0, 'Initialisation du pipeline...', 'INFO');
+
+    // Vérifier que la fonction existe
+    if (typeof legacy_runFullPipeline_PRIME !== 'function') {
+      throw new Error('Fonction legacy_runFullPipeline_PRIME() non trouvée');
+    }
+
+    // Lancer le pipeline
+    emettreProgression(1, 20, 'Lancement des 4 phases...', 'INFO');
+    const result = legacy_runFullPipeline_PRIME();
+
+    emettreProgression(4, 100, 'Pipeline terminé !', 'SUCCESS');
+
+    // Nettoyer la progression après 5 secondes
+    Utilities.sleep(5000);
+    cleanLegacyProgress();
+
+    Logger.log('✅ [WIZARD] Pipeline terminé avec succès');
+
+    return {
+      ok: true,
+      message: result.message || 'Pipeline exécuté avec succès',
+      testSheets: result.testSheets || 0,
+      duration: result.duration || 0
+    };
+
+  } catch (e) {
+    Logger.log(`❌ [WIZARD] Erreur pipeline: ${e}`);
+    emettreProgression(0, 0, `Erreur: ${e.message}`, 'ERROR');
+
+    return {
+      ok: false,
+      message: e.message || 'Erreur lors de l\'exécution du pipeline'
+    };
+  }
+}
+
+/**
+ * Génère un rapport détaillé de la répartition (Phase 5)
+ */
+function wizard_genererRapport() {
+  try {
+    Logger.log('📊 [WIZARD] Génération du rapport');
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const testSheets = ss.getSheets().filter(s => s.getName().endsWith('TEST'));
+
+    if (testSheets.length === 0) {
+      throw new Error('Aucun onglet TEST trouvé. Exécutez d\'abord le pipeline.');
+    }
+
+    // Statistiques globales
+    let totalEleves = 0;
+    let totalFilles = 0;
+    let totalGarcons = 0;
+    const classesStats = [];
+    const lv2Stats = {};
+    const optionsStats = {};
+
+    testSheets.forEach(sheet => {
+      const data = sheet.getDataRange().getValues();
+      const headers = data[0];
+
+      // Trouver les colonnes
+      const colSexe = headers.indexOf('SEXE');
+      const colLV2 = headers.indexOf('LV2');
+      const colOPT = headers.indexOf('OPT');
+
+      const rows = data.slice(1).filter(row => row[0]); // Ignorer lignes vides
+
+      const filles = rows.filter(row => row[colSexe] === 'F').length;
+      const garcons = rows.filter(row => row[colSexe] === 'M').length;
+
+      totalEleves += rows.length;
+      totalFilles += filles;
+      totalGarcons += garcons;
+
+      classesStats.push({
+        nom: sheet.getName(),
+        effectif: rows.length,
+        filles: filles,
+        garcons: garcons,
+        scoreMoyen: null // TODO: calculer si besoin
+      });
+
+      // Stats LV2
+      rows.forEach(row => {
+        const lv2 = row[colLV2];
+        if (lv2) {
+          lv2Stats[lv2] = (lv2Stats[lv2] || 0) + 1;
+        }
+
+        const opt = row[colOPT];
+        if (opt) {
+          optionsStats[opt] = (optionsStats[opt] || 0) + 1;
+        }
+      });
+    });
+
+    const effectifMoyen = Math.round(totalEleves / testSheets.length);
+    const paritePourcentage = totalEleves > 0
+      ? Math.round((totalFilles / totalEleves) * 100)
+      : 50;
+    const parite = `${paritePourcentage}/${100 - paritePourcentage}`;
+
+    // Générer des alertes si déséquilibres
+    const alertes = [];
+
+    // Alerte parité
+    if (Math.abs(paritePourcentage - 50) > 10) {
+      alertes.push({
+        type: 'warning',
+        message: `Déséquilibre de parité détecté : ${parite} (F/M). Écart > 10%.`
+      });
+    }
+
+    // Alerte effectifs
+    classesStats.forEach(c => {
+      const ecart = Math.abs(c.effectif - effectifMoyen);
+      if (ecart > 3) {
+        alertes.push({
+          type: 'warning',
+          message: `Classe ${c.nom} : effectif ${c.effectif} (écart de ${ecart} par rapport à la moyenne ${effectifMoyen})`
+        });
+      }
+    });
+
+    Logger.log('✅ [WIZARD] Rapport généré');
+
+    return {
+      totalEleves: totalEleves,
+      nbClasses: testSheets.length,
+      effectifMoyen: effectifMoyen,
+      parite: parite,
+      classes: classesStats,
+      lv2: lv2Stats,
+      options: optionsStats,
+      alertes: alertes
+    };
+
+  } catch (e) {
+    Logger.log(`❌ [WIZARD] Erreur génération rapport: ${e}`);
+    throw new Error(`Impossible de générer le rapport: ${e.message}`);
+  }
+}
+
+/**
+ * Finalise la répartition : copie TEST → DEF (Phase 6)
+ */
+function wizard_finaliserTestVersDef() {
+  try {
+    Logger.log('🏁 [WIZARD] Finalisation TEST → DEF');
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const testSheets = ss.getSheets().filter(s => s.getName().endsWith('TEST'));
+
+    if (testSheets.length === 0) {
+      throw new Error('Aucun onglet TEST à finaliser');
+    }
+
+    let nbCopies = 0;
+
+    testSheets.forEach(testSheet => {
+      const nomTest = testSheet.getName();
+      const nomDef = nomTest.replace('TEST', 'DEF');
+
+      // Supprimer l'onglet DEF s'il existe
+      const defExistant = ss.getSheetByName(nomDef);
+      if (defExistant) {
+        ss.deleteSheet(defExistant);
+      }
+
+      // Copier TEST → DEF
+      const newDef = testSheet.copyTo(ss);
+      newDef.setName(nomDef);
+
+      // Déplacer DEF après TEST
+      const position = testSheet.getIndex() + 1;
+      ss.moveActiveSheet(position);
+
+      nbCopies++;
+    });
+
+    // Enregistrer dans l'historique
+    ajouterHistorique('Finalisation TEST → DEF', `${nbCopies} classe(s) finalisée(s)`);
+
+    Logger.log(`✅ [WIZARD] ${nbCopies} classe(s) finalisée(s)`);
+
+    return {
+      ok: true,
+      message: `${nbCopies} classe(s) finalisée(s) avec succès`,
+      nbCopies: nbCopies
+    };
+
+  } catch (e) {
+    Logger.log(`❌ [WIZARD] Erreur finalisation: ${e}`);
+    throw new Error(`Impossible de finaliser: ${e.message}`);
+  }
+}
+
+/**
+ * Récupère l'historique des actions
+ */
+function wizard_getHistorique() {
+  try {
+    const userProps = PropertiesService.getUserProperties();
+    const historique = userProps.getProperty('WIZARD_HISTORIQUE');
+
+    if (!historique) {
+      return [];
+    }
+
+    return JSON.parse(historique);
+
+  } catch (e) {
+    Logger.log(`❌ [WIZARD] Erreur chargement historique: ${e}`);
+    return [];
+  }
+}
+
+/**
+ * Ajoute une entrée à l'historique
+ */
+function ajouterHistorique(action, resultat) {
+  try {
+    const userProps = PropertiesService.getUserProperties();
+    let historique = [];
+
+    const saved = userProps.getProperty('WIZARD_HISTORIQUE');
+    if (saved) {
+      historique = JSON.parse(saved);
+    }
+
+    historique.push({
+      date: new Date().toISOString(),
+      action: action,
+      resultat: resultat
+    });
+
+    // Garder seulement les 20 dernières entrées
+    if (historique.length > 20) {
+      historique = historique.slice(-20);
+    }
+
+    userProps.setProperty('WIZARD_HISTORIQUE', JSON.stringify(historique));
+
+  } catch (e) {
+    Logger.log(`⚠️ Erreur ajout historique: ${e}`);
+  }
+}
