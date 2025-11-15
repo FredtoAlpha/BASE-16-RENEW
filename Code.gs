@@ -56,16 +56,15 @@ function onOpen() {
 }
 
 /**
- * Affiche la nouvelle Console de Pilotage V4 dans une fenêtre modale large.
+ * Affiche la nouvelle Console de Pilotage V4 en mode NON-BLOQUANT.
+ * L'utilisateur peut continuer à utiliser Google Sheets pendant que l'interface est ouverte.
  */
 function showPilotageConsole() {
   try {
-    Logger.log('showPilotageConsole() appelée pour affichage modal');
-    const html = HtmlService.createHtmlOutputFromFile('ConsolePilotage')
-      .setWidth(1200)
-      .setHeight(800);
-    SpreadsheetApp.getUi().showModalDialog(html, '🚀 Console de Pilotage V4');
-    Logger.log('Console de Pilotage V4 affichée avec succès en mode modal.');
+    Logger.log('showPilotageConsole() appelée - Mode NON-BLOQUANT');
+    // Utilise la nouvelle interface V4 non-bloquante
+    ouvrirConsolePilotageV4_NonBlocking();
+    Logger.log('Console de Pilotage V4 affichée avec succès en mode NON-BLOQUANT.');
   } catch (error) {
     Logger.log('ERREUR dans showPilotageConsole: ' + error.toString());
     SpreadsheetApp.getUi().alert('Erreur lors de l'ouverture de la console: ' + error.toString());
