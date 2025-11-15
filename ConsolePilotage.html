@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <base target="_top">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Roboto', sans-serif; background-color: #f0f2f5; margin: 0; padding: 24px; }
+        .container { max-width: 800px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .header { background-color: #4A90E2; color: white; padding: 20px 24px; }
+        .wizard-content { padding: 24px; display: none; }
+        .wizard-content.active { display: block; }
+        .phase-title { font-size: 24px; font-weight: 700; color: #333; margin-bottom: 24px; border-bottom: 1px solid #e0e0e0; padding-bottom: 12px; }
+        .card { background-color: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 6px; padding: 20px; margin-bottom: 20px; }
+        .footer { display: flex; justify-content: space-between; padding: 20px 24px; background-color: #f8f9fa; border-top: 1px solid #e0e0e0; }
+        .btn { padding: 10px 20px; border: none; border-radius: 4px; font-size: 14px; font-weight: 500; cursor: pointer; text-transform: uppercase; }
+        .btn-primary { background-color: #4A90E2; color: white; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header"><h1>Console de Pilotage</h1></div>
+    <div id="phase-1" class="wizard-content active"><h2 class="phase-title">Phase 1 : Initialisation</h2></div>
+    <div id="phase-2" class="wizard-content"><h2 class="phase-title">Phase 2 : Préparation</h2></div>
+    <div id="phase-3" class="wizard-content"><h2 class="phase-title">Phase 3 : Configuration</h2></div>
+    <div id="phase-4" class="wizard-content"><h2 class="phase-title">Phase 4 : Exécution</h2></div>
+    <div id="phase-5" class="wizard-content"><h2 class="phase-title">Phase 5 : Rapport</h2></div>
+    <div class="footer">
+        <button id="btn-prev" class="btn">Précédent</button>
+        <button id="btn-next" class="btn btn-primary">Suivant</button>
+    </div>
+</div>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        let currentPhase = 1;
+        const phases = document.querySelectorAll('.wizard-content');
+        const btnPrev = document.getElementById('btn-prev');
+        const btnNext = document.getElementById('btn-next');
+        const updateUI = () => {
+            phases.forEach((p, i) => p.classList.toggle('active', (i + 1) === currentPhase));
+            btnPrev.style.display = currentPhase > 1 ? 'block' : 'none';
+        };
+        btnNext.addEventListener('click', () => { if (currentPhase < 5) currentPhase++; updateUI(); });
+        btnPrev.addEventListener('click', () => { if (currentPhase > 1) currentPhase--; updateUI(); });
+        updateUI();
+    });
+</script>
+</body>
+</html>
